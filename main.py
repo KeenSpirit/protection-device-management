@@ -1,344 +1,288 @@
 """
-Protection Device Management
-A GUI application for viewing and managing protection device data.
+PowerFactory Protection Device Management
+Main application with landing page for navigating to different modules.
 """
 
 import tkinter as tk
-from tkinter import ttk, messagebox
-import pandas as pd
-from pathlib import Path
-import sys
+from tkinter import ttk
 
-# Configuration
-SOURCE_DIR = Path(r"E:\Programming\_python_work\protection-device-management\Data sources\Queries")
+from common import (
+    COLORS, configure_styles, center_window, create_styled_button
+)
+from data_manager import get_data_manager
+from ips_relay_patterns import IPSRelayPatternsWindow, get_summary_stats as get_ips_stats
+from relay_models import RelayModelsWindow, get_summary_stats as get_relay_stats
+from fuse_models import FuseModelsWindow, get_summary_stats as get_fuse_stats
+from mapping_files import MappingFilesWindow, get_summary_stats as get_mapping_stats
+from script_maintenance import ScriptMaintenanceWindow, get_summary_stats as get_maintenance_stats
 
 
-class ProtectionDeviceApp:
-    """Main application class for Protection Device Management GUI."""
-
-    # Color scheme
-    COLORS = {
-        'bg_primary': '#f5f6fa',
-        'bg_secondary': '#ffffff',
-        'accent': '#2c3e50',
-        'accent_hover': '#34495e',
-        'text_primary': '#2c3e50',
-        'text_secondary': '#7f8c8d',
-        'border': '#dcdde1',
-        'header_bg': '#3498db',
-        'header_fg': '#ffffff',
-        'row_even': '#ffffff',
-        'row_odd': '#f8f9fa',
-        'exit_btn': '#e74c3c',
-        'exit_btn_hover': '#c0392b',
-    }
+class LandingPage:
+    """Main landing page for Protection Device Management."""
 
     def __init__(self, root):
-        """Initialize the application."""
+        """Initialize the landing page."""
         self.root = root
-        self.root.title("Protection Device Management")
-        self.root.geometry("1200x700")
-        self.root.minsize(900, 500)
-        self.root.configure(bg=self.COLORS['bg_primary'])
+        self.root.title("PowerFactory Protection Device Management")
+        self.root.geometry("900x750")
+        self.root.minsize(800, 650)
+        self.root.configure(bg=COLORS['bg_primary'])
 
-        # Center window on screen
-        self._center_window()
+        # Center window
+        center_window(self.root, 900, 750)
 
         # Configure styles
-        self._configure_styles()
-
-        # Load and process data
-        self.data = self._load_data()
-        self.summary_data = self._create_summary()
+        configure_styles()
 
         # Build UI
         self._create_widgets()
 
-    def _center_window(self):
-        """Center the window on the screen."""
-        self.root.update_idletasks()
-        width = self.root.winfo_width()
-        height = self.root.winfo_height()
-        x = (self.root.winfo_screenwidth() // 2) - (width // 2)
-        y = (self.root.winfo_screenheight() // 2) - (height // 2)
-        self.root.geometry(f'+{x}+{y}')
-
-    def _configure_styles(self):
-        """Configure ttk styles for a modern look."""
-        self.style = ttk.Style()
-        self.style.theme_use('clam')
-
-        # Treeview styling
-        self.style.configure(
-            "Custom.Treeview",
-            background=self.COLORS['bg_secondary'],
-            foreground=self.COLORS['text_primary'],
-            fieldbackground=self.COLORS['bg_secondary'],
-            borderwidth=0,
-            font=('Segoe UI', 10),
-            rowheight=30
-        )
-
-        self.style.configure(
-            "Custom.Treeview.Heading",
-            background=self.COLORS['header_bg'],
-            foreground=self.COLORS['header_fg'],
-            font=('Segoe UI', 10, 'bold'),
-            borderwidth=0,
-            relief='flat'
-        )
-
-        self.style.map(
-            "Custom.Treeview.Heading",
-            background=[('active', self.COLORS['accent'])]
-        )
-
-        self.style.map(
-            "Custom.Treeview",
-            background=[('selected', self.COLORS['header_bg'])],
-            foreground=[('selected', self.COLORS['header_fg'])]
-        )
-
-        # Frame styling
-        self.style.configure(
-            "Card.TFrame",
-            background=self.COLORS['bg_secondary']
-        )
-
-        self.style.configure(
-            "Main.TFrame",
-            background=self.COLORS['bg_primary']
-        )
-
-    def _load_data(self):
-        """Load data from the CSV file."""
-        csv_path = SOURCE_DIR / "Report-Cache-ProtectionSettingIDs-EX.csv"
-
-        try:
-            df = pd.read_csv(csv_path, encoding='utf-8')
-            return df
-        except FileNotFoundError:
-            messagebox.showerror(
-                "File Not Found",
-                f"Could not find the data file at:\n{csv_path}\n\n"
-                "Please ensure SOURCE_DIR is configured correctly."
-            )
-            return pd.DataFrame()
-        except Exception as e:
-            messagebox.showerror(
-                "Error Loading Data",
-                f"An error occurred while loading the data:\n{str(e)}"
-            )
-            return pd.DataFrame()
-
-    def _create_summary(self):
-        """Create summary data from the loaded CSV."""
-        if self.data.empty:
-            return []
-
-        # Get unique pattern names while preserving first occurrence order
-        unique_patterns = self.data['patternname'].unique()
-
-        summary = []
-        for pattern in unique_patterns:
-            # Filter rows for this pattern
-            pattern_rows = self.data[self.data['patternname'] == pattern]
-
-            # Get first matching asset name
-            first_asset = pattern_rows['assetname'].iloc[0]
-
-            # Count occurrences (EQL Population)
-            count = len(pattern_rows)
-
-            summary.append({
-                'pattern': pattern,
-                'asset': first_asset,
-                'eql_population': count,
-                'powerfactory_model': '',  # Placeholder for future
-                'mapping_file': ''  # Placeholder for future
-            })
-
-        # Sort by EQL Population from largest to smallest
-        summary.sort(key=lambda x: x['eql_population'], reverse=True)
-
-        return summary
-
     def _create_widgets(self):
         """Create all GUI widgets."""
-        # Main container
-        main_frame = ttk.Frame(self.root, style="Main.TFrame")
-        main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        # Create fixed footer first (pack at bottom)
+        self._create_footer(self.root)
 
-        # Header section
-        self._create_header(main_frame)
+        # Main container with scrollbar support (above footer)
+        scroll_container = tk.Frame(self.root, bg=COLORS['bg_primary'])
+        scroll_container.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
-        # Table section
-        self._create_table(main_frame)
+        main_canvas = tk.Canvas(scroll_container, bg=COLORS['bg_primary'], highlightthickness=0)
+        scrollbar = ttk.Scrollbar(scroll_container, orient=tk.VERTICAL, command=main_canvas.yview)
 
-        # Footer section with buttons
-        self._create_footer(main_frame)
+        main_frame = tk.Frame(main_canvas, bg=COLORS['bg_primary'])
+
+        main_frame.bind(
+            "<Configure>",
+            lambda e: main_canvas.configure(scrollregion=main_canvas.bbox("all"))
+        )
+
+        main_canvas.create_window((0, 0), window=main_frame, anchor="nw")
+        main_canvas.configure(yscrollcommand=scrollbar.set)
+
+        # Pack scrollbar and canvas
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        main_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # Bind mousewheel
+        main_canvas.bind_all("<MouseWheel>", lambda e: main_canvas.yview_scroll(int(-1*(e.delta/120)), "units"))
+
+        # Content container
+        content_frame = tk.Frame(main_frame, bg=COLORS['bg_primary'])
+        content_frame.pack(fill=tk.BOTH, expand=True, padx=40, pady=30)
+
+        # Header
+        self._create_header(content_frame)
+
+        # Sections container
+        sections_frame = tk.Frame(content_frame, bg=COLORS['bg_primary'])
+        sections_frame.pack(fill=tk.BOTH, expand=True, pady=(20, 0))
+
+        # Create all 5 sections
+        self._create_section(
+            sections_frame,
+            "1. IPS Relay Patterns",
+            "View and analyze protection relay patterns from IPS data.",
+            "Open IPS Relay Patterns",
+            self._open_ips_relay_patterns,
+            get_ips_stats()
+        )
+
+        self._create_section(
+            sections_frame,
+            "2. PowerFactory Relay Models",
+            "Manage relay models in PowerFactory.",
+            "Open Relay Models",
+            self._open_relay_models,
+            get_relay_stats()
+        )
+
+        self._create_section(
+            sections_frame,
+            "3. PowerFactory Fuse Models",
+            "Manage fuse models in PowerFactory.",
+            "Open Fuse Models",
+            self._open_fuse_models,
+            get_fuse_stats()
+        )
+
+        self._create_section(
+            sections_frame,
+            "4. IPS to PowerFactory Mapping Files",
+            "Configure mapping between IPS and PowerFactory data.",
+            "Open Mapping Files",
+            self._open_mapping_files,
+            get_mapping_stats()
+        )
+
+        self._create_section(
+            sections_frame,
+            "5. IPS to PowerFactory Script Maintenance",
+            "Maintain and configure automation scripts.",
+            "Open Script Maintenance",
+            self._open_script_maintenance,
+            get_maintenance_stats()
+        )
 
     def _create_header(self, parent):
         """Create the header section."""
-        header_frame = tk.Frame(parent, bg=self.COLORS['bg_primary'])
-        header_frame.pack(fill=tk.X, pady=(0, 15))
+        header_frame = tk.Frame(parent, bg=COLORS['bg_primary'])
+        header_frame.pack(fill=tk.X)
 
         # Title
         title_label = tk.Label(
             header_frame,
-            text="Protection Device Summary",
-            font=('Segoe UI', 24, 'bold'),
-            fg=self.COLORS['accent'],
-            bg=self.COLORS['bg_primary']
+            text="PowerFactory Protection Device Management",
+            font=('Segoe UI', 26, 'bold'),
+            fg=COLORS['accent'],
+            bg=COLORS['bg_primary']
         )
-        title_label.pack(anchor='w')
+        title_label.pack(anchor='center')
 
-        # Subtitle with record count
-        record_count = len(self.summary_data)
+        # Subtitle
         subtitle_label = tk.Label(
             header_frame,
-            text=f"Showing {record_count} unique protection patterns",
-            font=('Segoe UI', 11),
-            fg=self.COLORS['text_secondary'],
-            bg=self.COLORS['bg_primary']
+            text="Select a module below to get started",
+            font=('Segoe UI', 12),
+            fg=COLORS['text_secondary'],
+            bg=COLORS['bg_primary']
         )
-        subtitle_label.pack(anchor='w', pady=(5, 0))
+        subtitle_label.pack(anchor='center', pady=(8, 0))
 
-    def _create_table(self, parent):
-        """Create the main table with scrollbar."""
-        # Card-like container for table
-        table_container = ttk.Frame(parent, style="Card.TFrame")
-        table_container.pack(fill=tk.BOTH, expand=True)
+    def _create_section(self, parent, title, description, button_text, button_command, summary_text):
+        """Create a section card."""
+        # Section container with border
+        section_outer = tk.Frame(parent, bg=COLORS['section_border'])
+        section_outer.pack(fill=tk.X, pady=(0, 15))
 
-        # Add subtle border effect
-        border_frame = tk.Frame(
-            table_container,
-            bg=self.COLORS['border'],
-            highlightthickness=0
+        section_frame = tk.Frame(
+            section_outer,
+            bg=COLORS['section_bg'],
+            padx=20,
+            pady=15
         )
-        border_frame.pack(fill=tk.BOTH, expand=True, padx=1, pady=1)
+        section_frame.pack(fill=tk.X, padx=2, pady=2)
 
-        inner_frame = tk.Frame(border_frame, bg=self.COLORS['bg_secondary'])
-        inner_frame.pack(fill=tk.BOTH, expand=True)
+        # Left side: Title, Description, Button
+        left_frame = tk.Frame(section_frame, bg=COLORS['section_bg'])
+        left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        # Define columns
-        columns = (
-            'pattern',
-            'asset',
-            'eql_population',
-            'powerfactory_model',
-            'mapping_file'
+        # Section title
+        title_label = tk.Label(
+            left_frame,
+            text=title,
+            font=('Segoe UI', 14, 'bold'),
+            fg=COLORS['accent'],
+            bg=COLORS['section_bg'],
+            anchor='w'
         )
+        title_label.pack(fill=tk.X)
 
-        # Create treeview
-        self.tree = ttk.Treeview(
-            inner_frame,
-            columns=columns,
-            show='headings',
-            style="Custom.Treeview",
-            selectmode='browse'
+        # Description
+        desc_label = tk.Label(
+            left_frame,
+            text=description,
+            font=('Segoe UI', 10),
+            fg=COLORS['text_secondary'],
+            bg=COLORS['section_bg'],
+            anchor='w'
         )
+        desc_label.pack(fill=tk.X, pady=(5, 10))
 
-        # Configure column headings and widths
-        column_config = {
-            'pattern': ('Pattern', 300, 'w'),
-            'asset': ('Asset', 200, 'w'),
-            'eql_population': ('EQL Population', 120, 'center'),
-            'powerfactory_model': ('PowerFactory Model', 200, 'center'),
-            'mapping_file': ('Mapping File', 200, 'center')
-        }
-
-        for col, (heading, width, anchor) in column_config.items():
-            self.tree.heading(col, text=heading, anchor='center')
-            self.tree.column(col, width=width, anchor=anchor, minwidth=80)
-
-        # Create scrollbar
-        scrollbar = ttk.Scrollbar(
-            inner_frame,
-            orient=tk.VERTICAL,
-            command=self.tree.yview
-        )
-        self.tree.configure(yscrollcommand=scrollbar.set)
-
-        # Pack table and scrollbar
-        self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
-        # Populate table
-        self._populate_table()
-
-        # Bind alternating row colors
-        self.tree.tag_configure('oddrow', background=self.COLORS['row_odd'])
-        self.tree.tag_configure('evenrow', background=self.COLORS['row_even'])
-
-    def _populate_table(self):
-        """Populate the table with summary data."""
-        for i, row in enumerate(self.summary_data):
-            tag = 'evenrow' if i % 2 == 0 else 'oddrow'
-            self.tree.insert(
-                '',
-                tk.END,
-                values=(
-                    row['pattern'],
-                    row['asset'],
-                    row['eql_population'],
-                    row['powerfactory_model'],
-                    row['mapping_file']
-                ),
-                tags=(tag,)
-            )
-
-    def _create_footer(self, parent):
-        """Create the footer section with buttons."""
-        footer_frame = tk.Frame(parent, bg=self.COLORS['bg_primary'])
-        footer_frame.pack(fill=tk.X, pady=(15, 0))
-
-        # Exit button with custom styling
-        self.exit_btn = tk.Button(
-            footer_frame,
-            text="Exit",
-            font=('Segoe UI', 11),
+        # Button
+        btn = tk.Button(
+            left_frame,
+            text=button_text,
+            font=('Segoe UI', 10),
             fg='white',
-            bg=self.COLORS['exit_btn'],
-            activebackground=self.COLORS['exit_btn_hover'],
+            bg=COLORS['header_bg'],
+            activebackground=COLORS['accent'],
             activeforeground='white',
             relief='flat',
             cursor='hand2',
-            padx=30,
-            pady=8,
-            command=self._on_exit
+            padx=20,
+            pady=6,
+            command=button_command
         )
-        self.exit_btn.pack(side=tk.RIGHT)
+        btn.pack(anchor='w')
 
-        # Hover effects
-        self.exit_btn.bind('<Enter>', self._on_exit_hover)
-        self.exit_btn.bind('<Leave>', self._on_exit_leave)
+        # Button hover effects
+        btn.bind('<Enter>', lambda e: btn.configure(bg=COLORS['accent']))
+        btn.bind('<Leave>', lambda e: btn.configure(bg=COLORS['header_bg']))
 
-        # Status label (left side)
-        if self.data.empty:
-            status_text = "⚠ No data loaded"
-            status_color = self.COLORS['exit_btn']
-        else:
-            total_records = len(self.data)
-            status_text = f"✓ {total_records:,} total records processed"
-            status_color = '#27ae60'
+        # Right side: Status
+        right_frame = tk.Frame(section_frame, bg=COLORS['section_bg'])
+        right_frame.pack(side=tk.RIGHT, padx=(20, 0))
 
-        status_label = tk.Label(
-            footer_frame,
-            text=status_text,
+        # Status label
+        summary_title = tk.Label(
+            right_frame,
+            text="Status",
+            font=('Segoe UI', 10, 'bold'),
+            fg=COLORS['accent'],
+            bg=COLORS['section_bg']
+        )
+        summary_title.pack(anchor='e')
+
+        # Summary value
+        summary_value = tk.Label(
+            right_frame,
+            text=summary_text,
             font=('Segoe UI', 10),
-            fg=status_color,
-            bg=self.COLORS['bg_primary']
+            fg=COLORS['text_secondary'],
+            bg=COLORS['section_bg'],
+            justify=tk.RIGHT
         )
-        status_label.pack(side=tk.LEFT)
+        summary_value.pack(anchor='e', pady=(3, 0))
 
-    def _on_exit_hover(self, event):
-        """Handle exit button hover."""
-        self.exit_btn.configure(bg=self.COLORS['exit_btn_hover'])
+    def _create_footer(self, parent):
+        """Create the footer section (fixed at bottom)."""
+        # Separator line
+        separator = tk.Frame(parent, bg=COLORS['border'], height=1)
+        separator.pack(side=tk.BOTTOM, fill=tk.X)
 
-    def _on_exit_leave(self, event):
-        """Handle exit button leave."""
-        self.exit_btn.configure(bg=self.COLORS['exit_btn'])
+        # Footer frame
+        footer_frame = tk.Frame(parent, bg=COLORS['bg_primary'])
+        footer_frame.pack(side=tk.BOTTOM, fill=tk.X, padx=40, pady=15)
+
+        # Exit button
+        create_styled_button(
+            footer_frame,
+            "Exit Application",
+            self._on_exit,
+            COLORS['exit_btn'],
+            COLORS['exit_btn_hover'],
+            side=tk.RIGHT
+        )
+
+        # Version label
+        version_label = tk.Label(
+            footer_frame,
+            text="Version 1.0",
+            font=('Segoe UI', 9),
+            fg=COLORS['text_secondary'],
+            bg=COLORS['bg_primary']
+        )
+        version_label.pack(side=tk.LEFT)
+
+    def _open_ips_relay_patterns(self):
+        """Open the IPS Relay Patterns window."""
+        IPSRelayPatternsWindow(self.root)
+
+    def _open_relay_models(self):
+        """Open the Relay Models window."""
+        RelayModelsWindow(self.root)
+
+    def _open_fuse_models(self):
+        """Open the Fuse Models window."""
+        FuseModelsWindow(self.root)
+
+    def _open_mapping_files(self):
+        """Open the Mapping Files window."""
+        MappingFilesWindow(self.root)
+
+    def _open_script_maintenance(self):
+        """Open the Script Maintenance window."""
+        ScriptMaintenanceWindow(self.root)
 
     def _on_exit(self):
         """Handle exit button click."""
@@ -356,7 +300,14 @@ def main():
     except tk.TclError:
         pass  # Icon not available
 
-    app = ProtectionDeviceApp(root)
+    # Initialize data manager - loads all data at startup
+    print("Loading data sources...")
+    data_manager = get_data_manager()
+    print(f"  - Loaded {len(data_manager.get_relay_patterns())} relay patterns")
+    print(f"  - Loaded {len(data_manager.get_mapping_files())} mapping files")
+    print("Data loading complete.")
+
+    app = LandingPage(root)
     root.mainloop()
 
 

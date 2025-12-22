@@ -1,6 +1,7 @@
 """
 IPS Relay Patterns Module
 Displays summary of protection device patterns from IPS data.
+Supports filtering by SEQ and Regional data sources.
 """
 
 import tkinter as tk
@@ -36,14 +37,30 @@ class IPSRelayPatternsWindow:
 
         # Get data from data manager
         self.data_manager = get_data_manager()
-        self.summary_data = self.data_manager.get_relay_patterns()
-        self.total_records = self.data_manager.get_ips_total_records()
+
+        # Checkbox state variables (both checked by default)
+        self.seq_var = tk.BooleanVar(value=True)
+        self.regional_var = tk.BooleanVar(value=True)
 
         # Build UI
         self._create_widgets()
 
         # Handle window close
         self.window.protocol("WM_DELETE_WINDOW", self._on_return)
+
+    def _get_filtered_data(self):
+        """Get relay patterns based on current checkbox selections."""
+        return self.data_manager.get_relay_patterns(
+            include_seq=self.seq_var.get(),
+            include_regional=self.regional_var.get()
+        )
+
+    def _get_total_records(self):
+        """Get total records based on current checkbox selections."""
+        return self.data_manager.get_ips_total_records(
+            include_seq=self.seq_var.get(),
+            include_regional=self.regional_var.get()
+        )
 
     def _create_widgets(self):
         """Create all GUI widgets."""
@@ -75,16 +92,62 @@ class IPSRelayPatternsWindow:
         )
         title_label.pack(anchor='w')
 
-        # Subtitle with record count
-        record_count = len(self.summary_data)
-        subtitle_label = tk.Label(
-            header_frame,
-            text=f"Showing {record_count} unique protection patterns",
+        # Subtitle row with record count and checkboxes
+        subtitle_frame = tk.Frame(header_frame, bg=COLORS['bg_primary'])
+        subtitle_frame.pack(fill=tk.X, pady=(5, 0))
+
+        # Subtitle with record count (left side)
+        self.subtitle_label = tk.Label(
+            subtitle_frame,
+            text="",
             font=('Segoe UI', 11),
             fg=COLORS['text_secondary'],
             bg=COLORS['bg_primary']
         )
-        subtitle_label.pack(anchor='w', pady=(5, 0))
+        self.subtitle_label.pack(side=tk.LEFT)
+
+        # Checkbox container (right side)
+        checkbox_frame = tk.Frame(subtitle_frame, bg=COLORS['bg_primary'])
+        checkbox_frame.pack(side=tk.RIGHT)
+
+        # Regional checkbox
+        regional_cb = tk.Checkbutton(
+            checkbox_frame,
+            text="Regional",
+            variable=self.regional_var,
+            font=('Segoe UI', 10),
+            bg=COLORS['bg_primary'],
+            activebackground=COLORS['bg_primary'],
+            command=self._on_filter_change
+        )
+        regional_cb.pack(side=tk.RIGHT, padx=(10, 0))
+
+        # SEQ checkbox
+        seq_cb = tk.Checkbutton(
+            checkbox_frame,
+            text="SEQ",
+            variable=self.seq_var,
+            font=('Segoe UI', 10),
+            bg=COLORS['bg_primary'],
+            activebackground=COLORS['bg_primary'],
+            command=self._on_filter_change
+        )
+        seq_cb.pack(side=tk.RIGHT)
+
+        # Update subtitle text
+        self._update_subtitle()
+
+    def _update_subtitle(self):
+        """Update the subtitle text based on current filter."""
+        data = self._get_filtered_data()
+        record_count = len(data)
+        self.subtitle_label.config(text=f"Showing {record_count} unique protection patterns")
+
+    def _on_filter_change(self):
+        """Handle checkbox state change - refresh the table."""
+        self._update_subtitle()
+        self._refresh_table()
+        self._update_footer_status()
 
     def _create_table(self, parent):
         """Create the main table with scrollbar."""
@@ -108,6 +171,7 @@ class IPSRelayPatternsWindow:
             'pattern',
             'asset',
             'eql_population',
+            'source',
             'powerfactory_model',
             'mapping_file'
         )
@@ -123,16 +187,17 @@ class IPSRelayPatternsWindow:
 
         # Configure column headings and widths
         column_config = {
-            'pattern': ('Pattern', 300, 'w'),
-            'asset': ('Asset', 200, 'w'),
+            'pattern': ('Pattern', 250, 'w'),
+            'asset': ('Asset', 180, 'w'),
             'eql_population': ('EQL Population', 120, 'center'),
-            'powerfactory_model': ('PowerFactory Model', 200, 'center'),
-            'mapping_file': ('Mapping File', 200, 'w')
+            'source': ('Source', 80, 'center'),
+            'powerfactory_model': ('PowerFactory Model', 180, 'center'),
+            'mapping_file': ('Mapping File', 180, 'w')
         }
 
         for col, (heading, width, anchor) in column_config.items():
             self.tree.heading(col, text=heading, anchor='center')
-            self.tree.column(col, width=width, anchor=anchor, minwidth=80)
+            self.tree.column(col, width=width, anchor=anchor, minwidth=60)
 
         # Create scrollbar
         scrollbar = ttk.Scrollbar(
@@ -152,11 +217,21 @@ class IPSRelayPatternsWindow:
         # Bind alternating row colors
         self.tree.tag_configure('oddrow', background=COLORS['row_odd'])
         self.tree.tag_configure('evenrow', background=COLORS['row_even'])
+        self.tree.tag_configure('seq_row', background='#e3f2fd')  # Light blue for SEQ
+        self.tree.tag_configure('regional_row', background='#fff3e0')  # Light orange for Regional
 
     def _populate_table(self):
         """Populate the table with summary data."""
-        for i, row in enumerate(self.summary_data):
-            tag = 'evenrow' if i % 2 == 0 else 'oddrow'
+        data = self._get_filtered_data()
+        for i, row in enumerate(data):
+            # Use source-based coloring
+            if row.source == 'SEQ':
+                tag = 'seq_row'
+            elif row.source == 'Regional':
+                tag = 'regional_row'
+            else:
+                tag = 'evenrow' if i % 2 == 0 else 'oddrow'
+
             self.tree.insert(
                 '',
                 tk.END,
@@ -164,19 +239,28 @@ class IPSRelayPatternsWindow:
                     row.pattern,
                     row.asset,
                     row.eql_population,
+                    row.source,
                     row.powerfactory_model,
                     row.mapping_file
                 ),
                 tags=(tag,)
             )
 
+    def _refresh_table(self):
+        """Clear and repopulate the table based on current filters."""
+        # Clear existing items
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+        # Repopulate
+        self._populate_table()
+
     def _create_footer(self, parent):
         """Create the footer section with buttons."""
-        footer_frame = tk.Frame(parent, bg=COLORS['bg_primary'])
-        footer_frame.pack(fill=tk.X, pady=(15, 0))
+        self.footer_frame = tk.Frame(parent, bg=COLORS['bg_primary'])
+        self.footer_frame.pack(fill=tk.X, pady=(15, 0))
 
         # Button container (right side)
-        button_container = tk.Frame(footer_frame, bg=COLORS['bg_primary'])
+        button_container = tk.Frame(self.footer_frame, bg=COLORS['bg_primary'])
         button_container.pack(side=tk.RIGHT)
 
         # Exit button
@@ -197,16 +281,30 @@ class IPSRelayPatternsWindow:
             COLORS['return_btn_hover']
         )
 
-        # Status label (left side)
-        if self.total_records == 0:
+        # Status label container (left side)
+        self.status_container = tk.Frame(self.footer_frame, bg=COLORS['bg_primary'])
+        self.status_container.pack(side=tk.LEFT)
+
+        # Create status label
+        self._update_footer_status()
+
+    def _update_footer_status(self):
+        """Update the footer status label."""
+        # Clear existing status labels
+        for widget in self.status_container.winfo_children():
+            widget.destroy()
+
+        total_records = self._get_total_records()
+
+        if total_records == 0:
             status_text = "⚠ No data loaded"
             status_color = COLORS['exit_btn']
         else:
-            status_text = f"✓ {self.total_records:,} total records processed"
+            status_text = f"✓ {total_records:,} total records processed"
             status_color = '#27ae60'
 
         status_label = tk.Label(
-            footer_frame,
+            self.status_container,
             text=status_text,
             font=('Segoe UI', 10),
             fg=status_color,

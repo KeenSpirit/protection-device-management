@@ -9,12 +9,16 @@ from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set
 import re
+import json
+import ast
+from datetime import datetime
 
 
 # Configuration - Data source directories
 SOURCE_DIR = Path(r"E:\Programming\_python_work\protection-device-management\Data sources\Queries")
 MAPPING_DIR = Path(r"E:\Programming\_python_work\protection-device-management\Data sources\mapping")
 TYPE_MAPPING_DIR = Path(r"E:\Programming\_python_work\protection-device-management\Data sources\type mapping")
+LOGS_DIR = Path(r"E:\Programming\_python_work\protection-device-management\Data sources\logs")
 
 
 @dataclass
@@ -32,6 +36,7 @@ class RelayPattern:
     pattern: str
     asset: str
     eql_population: int
+    source: str = ''  # 'SEQ' or 'Regional'
     powerfactory_model: str = ''
     mapping_file: str = ''
 
@@ -45,18 +50,41 @@ class TypeMappingEntry:
 
 
 @dataclass
+class ScriptRunLog:
+    """Represents a summary of a script run from the log file."""
+    timestamp: str
+    substation: str
+    num_transfers: int
+    success_percentage: float
+
+
+@dataclass
+class FailedTransfer:
+    """Represents a failed device transfer from the log file."""
+    timestamp: str
+    substation: str
+    device_name: str
+    result: str
+
+
+@dataclass
 class DataCache:
     """Container for all cached application data."""
-    relay_patterns: List[RelayPattern] = field(default_factory=list)
+    relay_patterns_seq: List[RelayPattern] = field(default_factory=list)
+    relay_patterns_regional: List[RelayPattern] = field(default_factory=list)
     mapping_files: List[MappingFile] = field(default_factory=list)
     type_mapping_entries: List[TypeMappingEntry] = field(default_factory=list)
+    script_run_logs: List[ScriptRunLog] = field(default_factory=list)
+    failed_transfers: List[FailedTransfer] = field(default_factory=list)
 
     # Lookup dictionaries for fast access
     mapping_by_ips_pattern: Dict[str, str] = field(default_factory=dict)  # IPS pattern -> mapping filename
 
     # Statistics
-    ips_total_records: int = 0
+    ips_total_records_seq: int = 0
+    ips_total_records_regional: int = 0
     mapping_parse_stats: Dict[str, int] = field(default_factory=lambda: {'total': 0, 'success': 0})
+    script_log_stats: Dict[str, int] = field(default_factory=lambda: {'total_runs': 0, 'total_failures': 0})
 
 
 class DataManager:
@@ -92,6 +120,9 @@ class DataManager:
 
         # Load relay patterns and link to mapping files
         self._load_relay_patterns()
+
+        # Load script run logs
+        self._load_script_logs()
 
     def _load_type_mapping(self):
         """Load the type_mapping.csv file."""
@@ -185,18 +216,34 @@ class DataManager:
                 self.cache.mapping_by_ips_pattern[entry.ips] = entry.mapping_file + '.csv'
 
     def _load_relay_patterns(self):
-        """Load relay patterns from CSV and link to mapping files."""
-        self.cache.relay_patterns = []
+        """Load relay patterns from both SEQ and Regional CSV files and link to mapping files."""
+        self.cache.relay_patterns_seq = []
+        self.cache.relay_patterns_regional = []
 
-        csv_path = SOURCE_DIR / "Report-Cache-ProtectionSettingIDs-EX.csv"
+        # Load SEQ data source
+        seq_csv_path = SOURCE_DIR / "Report-Cache-ProtectionSettingIDs-EX.csv"
+        self._load_relay_patterns_from_file(seq_csv_path, 'SEQ')
 
+        # Load Regional data source
+        regional_csv_path = SOURCE_DIR / "Report-Cache-ProtectionSettingIDs-EE.csv"
+        self._load_relay_patterns_from_file(regional_csv_path, 'Regional')
+
+    def _load_relay_patterns_from_file(self, csv_path: Path, source: str):
+        """Load relay patterns from a specific CSV file."""
         try:
             df = pd.read_csv(csv_path, encoding='utf-8')
-            self.cache.ips_total_records = len(df)
+            total_records = len(df)
+
+            # Update total records for the appropriate source
+            if source == 'SEQ':
+                self.cache.ips_total_records_seq = total_records
+            else:
+                self.cache.ips_total_records_regional = total_records
 
             # Get unique pattern names
             unique_patterns = df['patternname'].unique()
 
+            patterns_list = []
             for pattern in unique_patterns:
                 pattern_rows = df[df['patternname'] == pattern]
                 first_asset = pattern_rows['assetname'].iloc[0]
@@ -205,25 +252,186 @@ class DataManager:
                 # Check for matching mapping file using type_mapping lookup
                 mapping_file_name = self.cache.mapping_by_ips_pattern.get(pattern, '')
 
-                self.cache.relay_patterns.append(RelayPattern(
+                patterns_list.append(RelayPattern(
                     pattern=pattern,
                     asset=first_asset,
                     eql_population=count,
+                    source=source,
                     powerfactory_model='',  # Placeholder for future
                     mapping_file=mapping_file_name
                 ))
 
             # Sort by EQL Population descending
-            self.cache.relay_patterns.sort(key=lambda x: x.eql_population, reverse=True)
+            patterns_list.sort(key=lambda x: x.eql_population, reverse=True)
+
+            # Add to appropriate cache list
+            if source == 'SEQ':
+                self.cache.relay_patterns_seq = patterns_list
+            else:
+                self.cache.relay_patterns_regional = patterns_list
+
+            print(f"  - Loaded {len(patterns_list)} {source} relay patterns from {total_records} records")
 
         except FileNotFoundError:
-            print(f"IPS data file not found: {csv_path}")
+            print(f"{source} IPS data file not found: {csv_path}")
         except Exception as e:
-            print(f"Error loading relay patterns: {e}")
+            print(f"Error loading {source} relay patterns: {e}")
 
-    def get_relay_patterns(self) -> List[RelayPattern]:
-        """Get all relay patterns."""
-        return self.cache.relay_patterns
+    def _load_script_logs(self):
+        """
+        Load script run logs from the JSON log file.
+
+        Processing rules:
+        1. Only top-level dictionaries (Dicts) with "message": "Data capture list: [...]" are processed
+        2. Each Dict contains an embedded list of dictionaries in the message string
+        3. For "Log of All Script Runs" table - one row per Dict:
+           - Timestamp: Dict["timestamp"]
+           - Substation: First 'SUBSTATION' value from the embedded list
+           - Number of Transfers: Length of the embedded list
+           - Percentage Successful Transfers: (items without 'RESULT' key / total) * 100
+        4. For "Log of All Failed Device Transfers" table:
+           - Convert embedded list to table rows
+           - Add Timestamp column from Dict["timestamp"]
+           - Remove rows with blank/missing RESULT (keep only rows WITH 'RESULT' key)
+           - Concatenate all Dict tables into one
+        """
+        self.cache.script_run_logs = []
+        self.cache.failed_transfers = []
+
+        log_file_path = LOGS_DIR / "ips_to_pf"
+
+        try:
+            if not log_file_path.exists():
+                print(f"Log file not found: {log_file_path}")
+                self.cache.script_log_stats = {'total_runs': 0, 'total_failures': 0}
+                return
+
+            # Read the JSON log file (one JSON object per line)
+            with open(log_file_path, 'r', encoding='utf-8') as f:
+                log_lines = f.readlines()
+
+            for line in log_lines:
+                line = line.strip()
+                if not line:
+                    continue
+
+                try:
+                    # Parse each line as a top-level dictionary (Dict)
+                    dict_entry = json.loads(line)
+                    message = dict_entry.get('message', '')
+
+                    # Rule 1: Only process Dicts that have "message": "Data capture list: [...]"
+                    if not message.startswith('Data capture list:'):
+                        continue
+
+                    # Get timestamp from Dict
+                    timestamp = dict_entry.get('timestamp', '')
+                    formatted_timestamp = self._format_timestamp(timestamp)
+
+                    # Rule 2: Parse the embedded list of dictionaries from the message string
+                    # Message format: "Data capture list: [{'SUBSTATION': 'BHL', ...}, ...]"
+                    list_start = message.find('[')
+                    list_end = message.rfind(']') + 1
+
+                    if list_start == -1 or list_end <= list_start:
+                        continue
+
+                    list_str = message[list_start:list_end]
+
+                    try:
+                        # Parse the Python-style list using ast.literal_eval
+                        embedded_list = ast.literal_eval(list_str)
+
+                        if not isinstance(embedded_list, list) or len(embedded_list) == 0:
+                            continue
+
+                        # === Build "Log of All Script Runs" table row ===
+                        # Substation: first 'SUBSTATION' value from embedded list
+                        substation = embedded_list[0].get('SUBSTATION', 'Unknown')
+
+                        # Number of Transfers: length of embedded list
+                        num_transfers = len(embedded_list)
+
+                        # Percentage Successful Transfers: items WITHOUT 'RESULT' key / total * 100
+                        successful_count = sum(1 for item in embedded_list if 'RESULT' not in item)
+                        success_percentage = (successful_count / num_transfers * 100) if num_transfers > 0 else 0
+
+                        self.cache.script_run_logs.append(ScriptRunLog(
+                            timestamp=formatted_timestamp,
+                            substation=substation,
+                            num_transfers=num_transfers,
+                            success_percentage=success_percentage
+                        ))
+
+                        # === Build "Log of All Failed Device Transfers" table rows ===
+                        # Rule 4: Only keep rows that HAVE a 'RESULT' key (remove blank/NaN Result rows)
+                        for item in embedded_list:
+                            # Check if 'RESULT' key exists and has a non-empty value
+                            if 'RESULT' in item:
+                                result_value = item.get('RESULT', '')
+                                # Skip if RESULT is blank/empty/None
+                                if result_value is None or (isinstance(result_value, str) and result_value.strip() == ''):
+                                    continue
+
+                                # Rule 3: Add Timestamp column from Dict["timestamp"]
+                                self.cache.failed_transfers.append(FailedTransfer(
+                                    timestamp=formatted_timestamp,
+                                    substation=item.get('SUBSTATION', 'Unknown'),
+                                    device_name=item.get('DEVICE NAME', 'Unknown'),
+                                    result=result_value
+                                ))
+
+                    except (ValueError, SyntaxError) as e:
+                        print(f"Error parsing data capture list: {e}")
+                        continue
+
+                except json.JSONDecodeError as e:
+                    print(f"Error parsing log line: {e}")
+                    continue
+
+            # Rule 5: All Dict tables are concatenated (done via appending to self.cache.failed_transfers)
+
+            # Update statistics
+            self.cache.script_log_stats = {
+                'total_runs': len(self.cache.script_run_logs),
+                'total_failures': len(self.cache.failed_transfers)
+            }
+
+            print(f"  - Loaded {len(self.cache.script_run_logs)} script run logs")
+            print(f"  - Loaded {len(self.cache.failed_transfers)} failed transfers")
+
+        except Exception as e:
+            print(f"Error loading script logs: {e}")
+            self.cache.script_log_stats = {'total_runs': 0, 'total_failures': 0}
+
+    def _format_timestamp(self, timestamp_str: str) -> str:
+        """Format ISO timestamp for display."""
+        try:
+            # Parse ISO format timestamp
+            dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+            # Format for display: YYYY-MM-DD HH:MM:SS
+            return dt.strftime('%Y-%m-%d %H:%M:%S')
+        except (ValueError, TypeError):
+            return timestamp_str
+
+    def get_relay_patterns(self, include_seq: bool = True, include_regional: bool = True) -> List[RelayPattern]:
+        """Get relay patterns filtered by source."""
+        patterns = []
+        if include_seq:
+            patterns.extend(self.cache.relay_patterns_seq)
+        if include_regional:
+            patterns.extend(self.cache.relay_patterns_regional)
+        # Sort combined list by EQL Population descending
+        patterns.sort(key=lambda x: x.eql_population, reverse=True)
+        return patterns
+
+    def get_seq_patterns(self) -> List[RelayPattern]:
+        """Get SEQ relay patterns only."""
+        return self.cache.relay_patterns_seq
+
+    def get_regional_patterns(self) -> List[RelayPattern]:
+        """Get Regional relay patterns only."""
+        return self.cache.relay_patterns_regional
 
     def get_mapping_files(self) -> List[MappingFile]:
         """Get all mapping files."""
@@ -233,39 +441,55 @@ class DataManager:
         """Get mapping file parse statistics."""
         return self.cache.mapping_parse_stats
 
-    def get_ips_total_records(self) -> int:
+    def get_ips_total_records(self, include_seq: bool = True, include_regional: bool = True) -> int:
         """Get total number of IPS records."""
-        return self.cache.ips_total_records
+        total = 0
+        if include_seq:
+            total += self.cache.ips_total_records_seq
+        if include_regional:
+            total += self.cache.ips_total_records_regional
+        return total
+
+    def get_script_run_logs(self) -> List[ScriptRunLog]:
+        """Get all script run logs."""
+        return self.cache.script_run_logs
+
+    def get_failed_transfers(self) -> List[FailedTransfer]:
+        """Get all failed transfers."""
+        return self.cache.failed_transfers
+
+    def get_script_log_stats(self) -> Dict[str, int]:
+        """Get script log statistics."""
+        return self.cache.script_log_stats
+
+    def _calculate_relay_mapping_percentage(self, patterns: List[RelayPattern]) -> float:
+        """Calculate percentage of devices (EQL population) that have mapping files."""
+        if not patterns:
+            return 0.0
+        total_relays = sum(p.eql_population for p in patterns)
+        if total_relays == 0:
+            return 0.0
+        relays_with_mapping = sum(p.eql_population for p in patterns if p.mapping_file)
+        return (relays_with_mapping / total_relays) * 100
 
     def get_ips_summary_stats(self) -> str:
-        """Get summary statistics string for IPS relay patterns."""
+        """Get summary statistics string for IPS relay patterns (SEQ and Regional separately)."""
         try:
-            total_patterns = len(self.cache.relay_patterns)
-            if total_patterns == 0:
+            seq_patterns = self.cache.relay_patterns_seq
+            regional_patterns = self.cache.relay_patterns_regional
+
+            if not seq_patterns and not regional_patterns:
                 return "No data loaded"
 
-            # Count patterns with mapping files
-            patterns_with_mapping = sum(
-                1 for p in self.cache.relay_patterns if p.mapping_file
-            )
+            # Calculate percentage of SEQ relays with mapping files
+            seq_percentage = self._calculate_relay_mapping_percentage(seq_patterns)
 
-            # Calculate percentage of patterns with mapping files
-            pattern_percentage = (patterns_with_mapping / total_patterns) * 100
-
-            # Sum total EQL population
-            total_eql = sum(p.eql_population for p in self.cache.relay_patterns)
-
-            # Sum EQL population for patterns with mapping files
-            eql_with_mapping = sum(
-                p.eql_population for p in self.cache.relay_patterns if p.mapping_file
-            )
-
-            # Calculate percentage of EQL population with mapping files
-            eql_percentage = (eql_with_mapping / total_eql) * 100 if total_eql > 0 else 0
+            # Calculate percentage of Regional relays with mapping files
+            regional_percentage = self._calculate_relay_mapping_percentage(regional_patterns)
 
             return (
-                f"{pattern_percentage:.1f}% of IPS patterns have mapping files\n"
-                f"{eql_percentage:.1f}% of IPS relays have mapping files"
+                f"{seq_percentage:.1f}% of SEQ IPS devices have mapping files\n"
+                f"{regional_percentage:.1f}% of Regional IPS devices have mapping files"
             )
         except Exception:
             return "Under Construction"
@@ -283,6 +507,34 @@ class DataManager:
             )
 
             return f"{validated_count} of {total_files} mapping files validated"
+        except Exception:
+            return "Under Construction"
+
+    def get_script_maintenance_summary_stats(self) -> str:
+        """Get summary statistics string for script maintenance."""
+        try:
+            total_runs = len(self.cache.script_run_logs)
+
+            if total_runs == 0:
+                return "No script runs logged"
+
+            # Calculate weighted % successful transfers
+            # Weight each run's success percentage by its number of transfers
+            total_transfers = sum(log.num_transfers for log in self.cache.script_run_logs)
+
+            if total_transfers > 0:
+                # Weighted sum: sum of (success_percentage * num_transfers) / total_transfers
+                weighted_success = sum(
+                    (log.success_percentage / 100) * log.num_transfers
+                    for log in self.cache.script_run_logs
+                ) / total_transfers * 100
+            else:
+                weighted_success = 0
+
+            return (
+                f"{total_runs} script run(s) logged\n"
+                f"{weighted_success:.1f}% Successful Transfers"
+            )
         except Exception:
             return "Under Construction"
 

@@ -78,7 +78,7 @@ class LandingPage:
         columns_frame = tk.Frame(content_frame, bg=COLORS['bg_primary'])
         columns_frame.pack(fill=tk.BOTH, expand=True, pady=(20, 0))
 
-        # Left column (sections 1-3)
+        # Left column (sections 1, 3, 5)
         left_column = tk.Frame(columns_frame, bg=COLORS['bg_primary'])
         left_column.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
 
@@ -93,6 +93,28 @@ class LandingPage:
 
         self._create_section(
             left_column,
+            "3. PowerFactory Fuse Models",
+            "Manage fuse models in PowerFactory.",
+            "Open Fuse Models",
+            self._open_fuse_models,
+            get_fuse_stats()
+        )
+
+        self._create_section(
+            left_column,
+            "5. IPS to PowerFactory Script Maintenance",
+            "View script run logs and failed transfer details.",
+            "Open Script Maintenance",
+            self._open_script_maintenance,
+            get_maintenance_stats()
+        )
+
+        # Right column (sections 2, 4, 6)
+        right_column = tk.Frame(columns_frame, bg=COLORS['bg_primary'])
+        right_column.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(10, 0))
+
+        self._create_section(
+            right_column,
             "2. PowerFactory Relay Models",
             "Manage relay models in PowerFactory.",
             "Open Relay Models",
@@ -101,34 +123,12 @@ class LandingPage:
         )
 
         self._create_section(
-            left_column,
-            "3. PowerFactory Fuse Models",
-            "Manage fuse models in PowerFactory.",
-            "Open Fuse Models",
-            self._open_fuse_models,
-            get_fuse_stats()
-        )
-
-        # Right column (sections 4-6)
-        right_column = tk.Frame(columns_frame, bg=COLORS['bg_primary'])
-        right_column.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(10, 0))
-
-        self._create_section(
             right_column,
             "4. IPS to PowerFactory Mapping Files",
             "Configure mapping between IPS and PowerFactory data.",
             "Open Mapping Files",
             self._open_mapping_files,
             get_mapping_stats()
-        )
-
-        self._create_section(
-            right_column,
-            "5. IPS to PowerFactory Script Maintenance",
-            "Maintain and configure automation scripts.",
-            "Open Script Maintenance",
-            self._open_script_maintenance,
-            get_maintenance_stats()
         )
 
         self._create_section_no_status(
@@ -384,8 +384,11 @@ def main():
     # Initialize data manager - loads all data at startup
     print("Loading data sources...")
     data_manager = get_data_manager()
-    print(f"  - Loaded {len(data_manager.get_relay_patterns())} relay patterns")
+    print(f"  - Loaded {len(data_manager.get_seq_patterns())} SEQ relay patterns")
+    print(f"  - Loaded {len(data_manager.get_regional_patterns())} Regional relay patterns")
     print(f"  - Loaded {len(data_manager.get_mapping_files())} mapping files")
+    print(f"  - Loaded {len(data_manager.get_script_run_logs())} script run logs")
+    print(f"  - Loaded {len(data_manager.get_failed_transfers())} failed transfers")
     print("Data loading complete.")
 
     app = LandingPage(root)

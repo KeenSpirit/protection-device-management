@@ -219,6 +219,60 @@ class ValidationSuiteWindow:
             )
             text_label.pack(side=tk.LEFT, fill=tk.X)
 
+        # Mapping File Validation Procedure section
+        section_title2 = tk.Label(
+            content_frame,
+            text="Mapping File Validation Procedure:",
+            font=('Segoe UI', 14, 'bold'),
+            fg=COLORS['accent'],
+            bg=COLORS['bg_secondary']
+        )
+        section_title2.pack(anchor='w', pady=(30, 10))
+
+        # Note text
+        note_label = tk.Label(
+            content_frame,
+            text="(This should only be performed on relay models that have been validated.)",
+            font=('Segoe UI', 11, 'italic'),
+            fg=COLORS['text_secondary'],
+            bg=COLORS['bg_secondary'],
+            anchor='w'
+        )
+        note_label.pack(anchor='w', pady=(0, 15))
+
+        # Mapping validation steps
+        mapping_steps = [
+            ("1)", "Using the ips_to_pf.py script and the mapping file, apply known relay settings from a test relay setting ID."),
+            ("2)", "Verify that all relay attributes match the relay setting ID."),
+        ]
+
+        for number, text in mapping_steps:
+            step_frame = tk.Frame(content_frame, bg=COLORS['bg_secondary'])
+            step_frame.pack(anchor='w', fill=tk.X, pady=(0, 8))
+
+            number_label = tk.Label(
+                step_frame,
+                text=number,
+                font=('Segoe UI', 11),
+                fg=COLORS['text_primary'],
+                bg=COLORS['bg_secondary'],
+                width=4,
+                anchor='w'
+            )
+            number_label.pack(side=tk.LEFT)
+
+            text_label = tk.Label(
+                step_frame,
+                text=text,
+                font=('Segoe UI', 11),
+                fg=COLORS['text_primary'],
+                bg=COLORS['bg_secondary'],
+                anchor='w',
+                justify=tk.LEFT,
+                wraplength=700
+            )
+            text_label.pack(side=tk.LEFT, fill=tk.X)
+
     def _create_footer(self, parent):
         """Create the footer section with buttons."""
         footer_frame = tk.Frame(parent, bg=COLORS['bg_primary'])

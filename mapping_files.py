@@ -5,11 +5,13 @@ Displays mapping file information linked from type_mapping.csv.
 
 import tkinter as tk
 from tkinter import ttk, messagebox
+import subprocess
+import platform
 
 from common import (
     COLORS, configure_styles, center_window, create_styled_button
 )
-from data_manager import get_data_manager
+from data_manager import get_data_manager, MAPPING_DIR
 
 
 class MappingFilesWindow:
@@ -75,6 +77,30 @@ class MappingFilesWindow:
         )
         title_label.pack(anchor='w')
 
+        # Directory location label
+        location_label = tk.Label(
+            header_frame,
+            text="Location of relay mapping files and type_mapping file:",
+            font=('Segoe UI', 10),
+            fg=COLORS['text_secondary'],
+            bg=COLORS['bg_primary']
+        )
+        location_label.pack(anchor='w', pady=(10, 0))
+
+        # Directory link (clickable)
+        dir_link = tk.Label(
+            header_frame,
+            text=str(MAPPING_DIR),
+            font=('Segoe UI', 10, 'underline'),
+            fg=COLORS['return_btn'],
+            bg=COLORS['bg_primary'],
+            cursor='hand2'
+        )
+        dir_link.pack(anchor='w')
+        dir_link.bind('<Button-1>', lambda e: self._open_directory(MAPPING_DIR))
+        dir_link.bind('<Enter>', lambda e: dir_link.configure(fg=COLORS['return_btn_hover']))
+        dir_link.bind('<Leave>', lambda e: dir_link.configure(fg=COLORS['return_btn']))
+
         # Status message
         total = self.parse_stats['total']
         with_mappings = self.parse_stats['success']
@@ -99,7 +125,30 @@ class MappingFilesWindow:
             fg=status_color,
             bg=COLORS['bg_primary']
         )
-        status_label.pack(anchor='w', pady=(5, 0))
+        status_label.pack(anchor='w', pady=(10, 0))
+
+        # Conditional help text - only show if some files don't have type mappings
+        if total > 0 and with_mappings < total:
+            help_label = tk.Label(
+                header_frame,
+                text="If a mapping file has no type_mapping defined, check that it is correctly configured in the type_mapping.csv file.",
+                font=('Segoe UI', 10),
+                fg=COLORS['text_secondary'],
+                bg=COLORS['bg_primary']
+            )
+            help_label.pack(anchor='w', pady=(5, 0))
+
+    def _open_directory(self, path):
+        """Open the directory in file explorer."""
+        try:
+            if platform.system() == 'Windows':
+                subprocess.run(['explorer', str(path)])
+            elif platform.system() == 'Darwin':  # macOS
+                subprocess.run(['open', str(path)])
+            else:  # Linux
+                subprocess.run(['xdg-open', str(path)])
+        except Exception as e:
+            print(f"Could not open directory: {e}")
 
     def _create_table(self, parent):
         """Create the main table with scrollbar."""

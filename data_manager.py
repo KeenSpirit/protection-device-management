@@ -141,11 +141,14 @@ class DataManager:
 
             for csv_file in csv_files:
                 filename = csv_file.name
+                # Get filename without extension for matching with type_mapping
+                filename_no_ext = csv_file.stem  # filename without .csv extension
 
                 # Find all type_mapping entries that reference this mapping file
+                # Match against filename without extension since type_mapping doesn't include .csv
                 matching_entries = [
                     entry for entry in self.cache.type_mapping_entries
-                    if entry.mapping_file == filename
+                    if entry.mapping_file == filename_no_ext
                 ]
 
                 # Collect unique IPS patterns and PF models
@@ -178,8 +181,8 @@ class DataManager:
 
         for entry in self.cache.type_mapping_entries:
             if entry.ips and entry.mapping_file:
-                # Map IPS pattern to its mapping file
-                self.cache.mapping_by_ips_pattern[entry.ips] = entry.mapping_file
+                # Map IPS pattern to its mapping file (add .csv extension for display)
+                self.cache.mapping_by_ips_pattern[entry.ips] = entry.mapping_file + '.csv'
 
     def _load_relay_patterns(self):
         """Load relay patterns from CSV and link to mapping files."""
@@ -273,7 +276,13 @@ class DataManager:
             total_files = len(self.cache.mapping_files)
             if total_files == 0:
                 return "No mapping files found"
-            return f"{total_files} mapping file(s)"
+
+            # Count mapping files with non-blank validated field
+            validated_count = sum(
+                1 for mf in self.cache.mapping_files if mf.validated
+            )
+
+            return f"{validated_count} of {total_files} mapping files validated"
         except Exception:
             return "Under Construction"
 

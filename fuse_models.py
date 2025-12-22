@@ -9,7 +9,7 @@ from placeholder import PlaceholderWindow
 
 class FuseModelsWindow(PlaceholderWindow):
     """Window for displaying PowerFactory Fuse Models data."""
-    
+
     def __init__(self, parent):
         """Initialize the Fuse Models window."""
         super().__init__(parent, "PowerFactory Fuse Models")

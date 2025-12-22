@@ -15,6 +15,7 @@ from relay_models import RelayModelsWindow, get_summary_stats as get_relay_stats
 from fuse_models import FuseModelsWindow, get_summary_stats as get_fuse_stats
 from mapping_files import MappingFilesWindow, get_summary_stats as get_mapping_stats
 from script_maintenance import ScriptMaintenanceWindow, get_summary_stats as get_maintenance_stats
+from validation_suite import ValidationSuiteWindow
 
 
 class LandingPage:
@@ -24,12 +25,12 @@ class LandingPage:
         """Initialize the landing page."""
         self.root = root
         self.root.title("PowerFactory Protection Device Management")
-        self.root.geometry("900x750")
-        self.root.minsize(800, 650)
+        self.root.geometry("1400x700")
+        self.root.minsize(1200, 600)
         self.root.configure(bg=COLORS['bg_primary'])
 
         # Center window
-        center_window(self.root, 900, 750)
+        center_window(self.root, 1400, 700)
 
         # Configure styles
         configure_styles()
@@ -73,13 +74,16 @@ class LandingPage:
         # Header
         self._create_header(content_frame)
 
-        # Sections container
-        sections_frame = tk.Frame(content_frame, bg=COLORS['bg_primary'])
-        sections_frame.pack(fill=tk.BOTH, expand=True, pady=(20, 0))
+        # Two-column sections container
+        columns_frame = tk.Frame(content_frame, bg=COLORS['bg_primary'])
+        columns_frame.pack(fill=tk.BOTH, expand=True, pady=(20, 0))
 
-        # Create all 5 sections
+        # Left column (sections 1-3)
+        left_column = tk.Frame(columns_frame, bg=COLORS['bg_primary'])
+        left_column.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
+
         self._create_section(
-            sections_frame,
+            left_column,
             "1. IPS Relay Patterns",
             "View and analyze protection relay patterns from IPS data.",
             "Open IPS Relay Patterns",
@@ -88,7 +92,7 @@ class LandingPage:
         )
 
         self._create_section(
-            sections_frame,
+            left_column,
             "2. PowerFactory Relay Models",
             "Manage relay models in PowerFactory.",
             "Open Relay Models",
@@ -97,7 +101,7 @@ class LandingPage:
         )
 
         self._create_section(
-            sections_frame,
+            left_column,
             "3. PowerFactory Fuse Models",
             "Manage fuse models in PowerFactory.",
             "Open Fuse Models",
@@ -105,8 +109,12 @@ class LandingPage:
             get_fuse_stats()
         )
 
+        # Right column (sections 4-6)
+        right_column = tk.Frame(columns_frame, bg=COLORS['bg_primary'])
+        right_column.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(10, 0))
+
         self._create_section(
-            sections_frame,
+            right_column,
             "4. IPS to PowerFactory Mapping Files",
             "Configure mapping between IPS and PowerFactory data.",
             "Open Mapping Files",
@@ -115,12 +123,20 @@ class LandingPage:
         )
 
         self._create_section(
-            sections_frame,
+            right_column,
             "5. IPS to PowerFactory Script Maintenance",
             "Maintain and configure automation scripts.",
             "Open Script Maintenance",
             self._open_script_maintenance,
             get_maintenance_stats()
+        )
+
+        self._create_section_no_status(
+            right_column,
+            "6. Relay and Mapping Validation Suite",
+            "Guidance on validating relay models and mapping files.",
+            "Open Validation Suite",
+            self._open_validation_suite
         )
 
     def _create_header(self, parent):
@@ -234,6 +250,67 @@ class LandingPage:
         )
         summary_value.pack(anchor='e', pady=(3, 0))
 
+    def _create_section_no_status(self, parent, title, description, button_text, button_command):
+        """Create a section card without the Status field."""
+        # Section container with border
+        section_outer = tk.Frame(parent, bg=COLORS['section_border'])
+        section_outer.pack(fill=tk.X, pady=(0, 15))
+
+        section_frame = tk.Frame(
+            section_outer,
+            bg=COLORS['section_bg'],
+            padx=20,
+            pady=15
+        )
+        section_frame.pack(fill=tk.X, padx=2, pady=2)
+
+        # Left side: Title, Description, Button
+        left_frame = tk.Frame(section_frame, bg=COLORS['section_bg'])
+        left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # Section title
+        title_label = tk.Label(
+            left_frame,
+            text=title,
+            font=('Segoe UI', 14, 'bold'),
+            fg=COLORS['accent'],
+            bg=COLORS['section_bg'],
+            anchor='w'
+        )
+        title_label.pack(fill=tk.X)
+
+        # Description
+        desc_label = tk.Label(
+            left_frame,
+            text=description,
+            font=('Segoe UI', 10),
+            fg=COLORS['text_secondary'],
+            bg=COLORS['section_bg'],
+            anchor='w'
+        )
+        desc_label.pack(fill=tk.X, pady=(5, 10))
+
+        # Button
+        btn = tk.Button(
+            left_frame,
+            text=button_text,
+            font=('Segoe UI', 10),
+            fg='white',
+            bg=COLORS['header_bg'],
+            activebackground=COLORS['accent'],
+            activeforeground='white',
+            relief='flat',
+            cursor='hand2',
+            padx=20,
+            pady=6,
+            command=button_command
+        )
+        btn.pack(anchor='w')
+
+        # Button hover effects
+        btn.bind('<Enter>', lambda e: btn.configure(bg=COLORS['accent']))
+        btn.bind('<Leave>', lambda e: btn.configure(bg=COLORS['header_bg']))
+
     def _create_footer(self, parent):
         """Create the footer section (fixed at bottom)."""
         # Separator line
@@ -283,6 +360,10 @@ class LandingPage:
     def _open_script_maintenance(self):
         """Open the Script Maintenance window."""
         ScriptMaintenanceWindow(self.root)
+
+    def _open_validation_suite(self):
+        """Open the Validation Suite window."""
+        ValidationSuiteWindow(self.root)
 
     def _on_exit(self):
         """Handle exit button click."""

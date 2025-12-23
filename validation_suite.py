@@ -9,6 +9,7 @@ from tkinter import ttk
 from common import (
     COLORS, configure_styles, center_window, create_styled_button
 )
+from data_manager import PF_DEVICE_VALIDATION_DIR, MAPPING_VALIDATION_DIR
 
 
 class ValidationSuiteWindow:
@@ -19,8 +20,8 @@ class ValidationSuiteWindow:
         self.parent = parent
         self.window = tk.Toplevel(parent)
         self.window.title("Relay Model and Mapping File Validation")
-        self.window.geometry("900x650")
-        self.window.minsize(800, 550)
+        self.window.geometry("900x700")
+        self.window.minsize(800, 600)
         self.window.configure(bg=COLORS['bg_primary'])
 
         # Make window modal
@@ -28,7 +29,7 @@ class ValidationSuiteWindow:
         self.window.grab_set()
 
         # Center window
-        center_window(self.window, 900, 650)
+        center_window(self.window, 900, 700)
 
         # Configure styles
         configure_styles()
@@ -118,6 +119,9 @@ class ValidationSuiteWindow:
 
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # Store canvas reference for cleanup
+        self.content_canvas = canvas
 
         # Add content to scrollable frame
         self._add_validation_content(scrollable_frame)
@@ -219,6 +223,88 @@ class ValidationSuiteWindow:
             )
             text_label.pack(side=tk.LEFT, fill=tk.X)
 
+        # Steps 5 and 6 for Relay Model Validation
+        additional_relay_steps = [
+            ("5)", "Move all documentation to the following directory:"),
+        ]
+
+        for number, text in additional_relay_steps:
+            step_frame = tk.Frame(content_frame, bg=COLORS['bg_secondary'])
+            step_frame.pack(anchor='w', fill=tk.X, pady=(8, 0))
+
+            number_label = tk.Label(
+                step_frame,
+                text=number,
+                font=('Segoe UI', 11),
+                fg=COLORS['text_primary'],
+                bg=COLORS['bg_secondary'],
+                width=4,
+                anchor='w'
+            )
+            number_label.pack(side=tk.LEFT)
+
+            text_label = tk.Label(
+                step_frame,
+                text=text,
+                font=('Segoe UI', 11),
+                fg=COLORS['text_primary'],
+                bg=COLORS['bg_secondary'],
+                anchor='w',
+                justify=tk.LEFT
+            )
+            text_label.pack(side=tk.LEFT, fill=tk.X)
+
+        # Directory path for step 5 (indented)
+        dir_frame = tk.Frame(content_frame, bg=COLORS['bg_secondary'])
+        dir_frame.pack(anchor='w', fill=tk.X, pady=(2, 8))
+
+        indent_label = tk.Label(
+            dir_frame,
+            text="",
+            font=('Segoe UI', 11),
+            bg=COLORS['bg_secondary'],
+            width=4
+        )
+        indent_label.pack(side=tk.LEFT)
+
+        dir_label = tk.Label(
+            dir_frame,
+            text=str(PF_DEVICE_VALIDATION_DIR),
+            font=('Segoe UI', 11),
+            fg=COLORS['text_secondary'],
+            bg=COLORS['bg_secondary'],
+            anchor='w',
+            justify=tk.LEFT
+        )
+        dir_label.pack(side=tk.LEFT, fill=tk.X)
+
+        # Step 6
+        step6_frame = tk.Frame(content_frame, bg=COLORS['bg_secondary'])
+        step6_frame.pack(anchor='w', fill=tk.X, pady=(0, 8))
+
+        step6_number = tk.Label(
+            step6_frame,
+            text="6)",
+            font=('Segoe UI', 11),
+            fg=COLORS['text_primary'],
+            bg=COLORS['bg_secondary'],
+            width=4,
+            anchor='w'
+        )
+        step6_number.pack(side=tk.LEFT)
+
+        step6_text = tk.Label(
+            step6_frame,
+            text="Update the PowerFactory device validation log with the exact name of the PowerFactory Relay Model.",
+            font=('Segoe UI', 11),
+            fg=COLORS['text_primary'],
+            bg=COLORS['bg_secondary'],
+            anchor='w',
+            justify=tk.LEFT,
+            wraplength=700
+        )
+        step6_text.pack(side=tk.LEFT, fill=tk.X)
+
         # Mapping File Validation Procedure section
         section_title2 = tk.Label(
             content_frame,
@@ -244,6 +330,7 @@ class ValidationSuiteWindow:
         mapping_steps = [
             ("1)", "Using the ips_to_pf.py script and the mapping file, apply known relay settings from a test relay setting ID."),
             ("2)", "Verify that all relay attributes match the relay setting ID."),
+            ("3)", "Move all documentation to the following directory:"),
         ]
 
         for number, text in mapping_steps:
@@ -272,6 +359,57 @@ class ValidationSuiteWindow:
                 wraplength=700
             )
             text_label.pack(side=tk.LEFT, fill=tk.X)
+
+        # Directory path for step 3 (indented)
+        mapping_dir_frame = tk.Frame(content_frame, bg=COLORS['bg_secondary'])
+        mapping_dir_frame.pack(anchor='w', fill=tk.X, pady=(2, 8))
+
+        mapping_indent_label = tk.Label(
+            mapping_dir_frame,
+            text="",
+            font=('Segoe UI', 11),
+            bg=COLORS['bg_secondary'],
+            width=4
+        )
+        mapping_indent_label.pack(side=tk.LEFT)
+
+        mapping_dir_label = tk.Label(
+            mapping_dir_frame,
+            text=str(MAPPING_VALIDATION_DIR),
+            font=('Segoe UI', 11),
+            fg=COLORS['text_secondary'],
+            bg=COLORS['bg_secondary'],
+            anchor='w',
+            justify=tk.LEFT
+        )
+        mapping_dir_label.pack(side=tk.LEFT, fill=tk.X)
+
+        # Step 4
+        step4_frame = tk.Frame(content_frame, bg=COLORS['bg_secondary'])
+        step4_frame.pack(anchor='w', fill=tk.X, pady=(0, 8))
+
+        step4_number = tk.Label(
+            step4_frame,
+            text="4)",
+            font=('Segoe UI', 11),
+            fg=COLORS['text_primary'],
+            bg=COLORS['bg_secondary'],
+            width=4,
+            anchor='w'
+        )
+        step4_number.pack(side=tk.LEFT)
+
+        step4_text = tk.Label(
+            step4_frame,
+            text="Update the IPS to PF mapping file validation log with the exact name of the mapping file.",
+            font=('Segoe UI', 11),
+            fg=COLORS['text_primary'],
+            bg=COLORS['bg_secondary'],
+            anchor='w',
+            justify=tk.LEFT,
+            wraplength=700
+        )
+        step4_text.pack(side=tk.LEFT, fill=tk.X)
 
     def _create_footer(self, parent):
         """Create the footer section with buttons."""
@@ -302,6 +440,7 @@ class ValidationSuiteWindow:
 
     def _on_return(self):
         """Handle return button click."""
+        self.content_canvas.unbind_all("<MouseWheel>")
         self.window.grab_release()
         self.window.destroy()
 

@@ -21,6 +21,9 @@ MAPPING_DIR = Path(r"E:\Programming\_python_work\protection-device-management\Da
 TYPE_MAPPING_DIR = Path(r"E:\Programming\_python_work\protection-device-management\Data sources\type mapping")
 LOGS_DIR = Path(r"E:\Programming\_python_work\protection-device-management\Data sources\logs")
 PF_TYPES_DIR = Path(r"E:\Programming\_python_work\protection-device-management\Data sources\PowerFactory types")
+PF_DEVICE_VALIDATION_DIR = Path(r"E:\Programming\_python_work\protection-device-management\Data sources\PowerFactory device validation")
+MAPPING_VALIDATION_DIR = Path(r"E:\Programming\_python_work\protection-device-management\Data sources\IPS to PF mapping validation")
+FUSE_DATASHEET_DIR = Path(r"E:\Programming\_python_work\protection-device-management\Data sources\Fuse datasheets")
 
 
 @dataclass
@@ -104,6 +107,11 @@ class DataCache:
     mapping_by_ips_pattern: Dict[str, str] = field(default_factory=dict)  # IPS pattern -> mapping filename
     mapping_by_pf_model: Dict[str, List[str]] = field(default_factory=dict)  # PF_MODEL -> list of mapping filenames
 
+    # Validation lookup sets
+    validated_pf_devices: Set[str] = field(default_factory=set)  # Set of validated PowerFactory device models
+    validated_mapping_files: Set[str] = field(default_factory=set)  # Set of validated mapping file names
+    fuse_datasheets: Set[str] = field(default_factory=set)  # Set of fuses with datasheets
+
     # Statistics
     ips_total_records_seq: int = 0
     ips_total_records_regional: int = 0
@@ -137,6 +145,9 @@ class DataManager:
 
     def _load_all_data(self):
         """Load all data sources and build relationships."""
+        # Load validation log files first (needed for populating validation fields)
+        self._load_validation_logs()
+
         # Load type mapping file first (needed for linking)
         self._load_type_mapping()
 
@@ -157,6 +168,95 @@ class DataManager:
 
         # Load PowerFactory fuse models
         self._load_fuse_models()
+
+    def _load_validation_logs(self):
+        """Load all validation log CSV files."""
+        # Load PowerFactory device validation log
+        self._load_pf_device_validation_log()
+
+        # Load IPS to PF mapping file validation log
+        self._load_mapping_validation_log()
+
+        # Load Fuse datasheet log
+        self._load_fuse_datasheet_log()
+
+    def _load_pf_device_validation_log(self):
+        """Load PowerFactory device validation log CSV file."""
+        self.cache.validated_pf_devices = set()
+
+        validation_log_path = PF_DEVICE_VALIDATION_DIR / "PowerFactory device validation log.csv"
+
+        try:
+            if not validation_log_path.exists():
+                print(f"PowerFactory device validation log not found: {validation_log_path}")
+                return
+
+            df = pd.read_csv(validation_log_path, encoding='utf-8')
+
+            if len(df.columns) > 0:
+                # Get values from the first column
+                first_col = df.columns[0]
+                for value in df[first_col].dropna():
+                    value_str = str(value).strip()
+                    if value_str:
+                        self.cache.validated_pf_devices.add(value_str)
+
+            print(f"  - Loaded {len(self.cache.validated_pf_devices)} validated PowerFactory devices")
+
+        except Exception as e:
+            print(f"Error loading PowerFactory device validation log: {e}")
+
+    def _load_mapping_validation_log(self):
+        """Load IPS to PF mapping file validation log CSV file."""
+        self.cache.validated_mapping_files = set()
+
+        validation_log_path = MAPPING_VALIDATION_DIR / "IPS to PF mapping file validation log.csv"
+
+        try:
+            if not validation_log_path.exists():
+                print(f"Mapping file validation log not found: {validation_log_path}")
+                return
+
+            df = pd.read_csv(validation_log_path, encoding='utf-8')
+
+            if len(df.columns) > 0:
+                # Get values from the first column
+                first_col = df.columns[0]
+                for value in df[first_col].dropna():
+                    value_str = str(value).strip()
+                    if value_str:
+                        self.cache.validated_mapping_files.add(value_str)
+
+            print(f"  - Loaded {len(self.cache.validated_mapping_files)} validated mapping files")
+
+        except Exception as e:
+            print(f"Error loading mapping file validation log: {e}")
+
+    def _load_fuse_datasheet_log(self):
+        """Load Fuse datasheet log CSV file."""
+        self.cache.fuse_datasheets = set()
+
+        datasheet_log_path = FUSE_DATASHEET_DIR / "Fuse datasheet log.csv"
+
+        try:
+            if not datasheet_log_path.exists():
+                print(f"Fuse datasheet log not found: {datasheet_log_path}")
+                return
+
+            df = pd.read_csv(datasheet_log_path, encoding='utf-8')
+
+            if len(df.columns) > 0:
+                # Get values from the first column
+                first_col = df.columns[0]
+                for value in df[first_col].dropna():
+                    value_str = str(value).strip()
+                    if value_str:
+                        self.cache.fuse_datasheets.add(value_str)
+
+            print(f"  - Loaded {len(self.cache.fuse_datasheets)} fuses with datasheets")
+
+        except Exception as e:
+            print(f"Error loading fuse datasheet log: {e}")
 
     def _load_type_mapping(self):
         """Load the type_mapping.csv file."""
@@ -227,10 +327,14 @@ class DataManager:
                 if ips_patterns or pf_models:
                     files_with_mappings += 1
 
+                # Check if this mapping file is validated (match against filename without extension)
+                validated = 'Yes' if filename_no_ext in self.cache.validated_mapping_files else ''
+
                 self.cache.mapping_files.append(MappingFile(
                     filename=filename,
                     ips_patterns=ips_patterns,
-                    pf_models=pf_models
+                    pf_models=pf_models,
+                    validated=validated
                 ))
 
         except Exception as e:
@@ -471,7 +575,9 @@ class DataManager:
                 manufacturer = str(row.get('Manufacturer', '')).strip() if pd.notna(row.get('Manufacturer', '')) else ''
                 model = str(row.get('Model', '')).strip() if pd.notna(row.get('Model', '')) else ''
                 used_in_eql = str(row.get('Used in EQL', '')).strip() if pd.notna(row.get('Used in EQL', '')) else ''
-                model_validated = str(row.get('Model Validated', '')).strip() if pd.notna(row.get('Model Validated', '')) else ''
+
+                # Check if this model is validated based on the validation log
+                model_validated = 'Yes' if model in self.cache.validated_pf_devices else ''
 
                 # Look up IPS mapping files from type_mapping based on PF_MODEL match
                 mapping_files = self.cache.mapping_by_pf_model.get(model, [])
@@ -513,7 +619,9 @@ class DataManager:
                 fuse = str(row.get('Fuse', '')).strip() if pd.notna(row.get('Fuse', '')) else ''
                 fuse_type = str(row.get('Type', '')).strip() if pd.notna(row.get('Type', '')) else ''
                 eql_standard = str(row.get('EQL Standard', '')).strip() if pd.notna(row.get('EQL Standard', '')) else ''
-                fuse_datasheet = str(row.get('Fuse datasheet', '')).strip() if pd.notna(row.get('Fuse datasheet', '')) else ''
+
+                # Check if this fuse has a datasheet based on the datasheet log
+                fuse_datasheet = 'Yes' if fuse in self.cache.fuse_datasheets else ''
 
                 self.cache.fuse_models.append(FuseModel(
                     fuse=fuse,

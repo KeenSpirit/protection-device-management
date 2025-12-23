@@ -26,10 +26,15 @@ The application consists of the following modules accessible from the main landi
 
 ### Directory Structure
 
-All data sources are located under:
-```
-E:\Programming\_python_work\protection-device-management\Data sources\
-```
+Data sources are organized into two categories:
+
+**Project-Relative Data Sources** (stored within the project directory):
+- These files move with the project when the repository is relocated
+- Located in subdirectories of the project root
+
+**External Data Sources** (absolute paths):
+- Located under: `E:\Programming\_python_work\protection-device-management\Data sources\`
+- May need updating when moving to a new environment
 
 ### 1. IPS Relay Patterns Data
 
@@ -50,7 +55,7 @@ E:\Programming\_python_work\protection-device-management\Data sources\
 
 ### 2. PowerFactory Relay Models Data
 
-**Location:** `E:\Programming\_python_work\protection-device-management\Data sources\PowerFactory types`
+**Location:** `<project_root>\pf_relay_models` (project-relative)
 
 | File | Description | Maintenance |
 |------|-------------|-------------|
@@ -65,7 +70,7 @@ E:\Programming\_python_work\protection-device-management\Data sources\
 
 #### Model Validated Column
 
-**Location:** `E:\Programming\_python_work\protection-device-management\Data sources\PowerFactory device validation`
+**Location:** `<project_root>\pf_device_validation` (project-relative)
 
 | File | Description | Maintenance |
 |------|-------------|-------------|
@@ -85,7 +90,7 @@ ABB REF615
 
 ### 3. PowerFactory Fuse Models Data
 
-**Location:** `E:\Programming\_python_work\protection-device-management\Data sources\PowerFactory types`
+**Location:** `<project_root>\pf_fuse_models` (project-relative)
 
 | File | Description | Maintenance |
 |------|-------------|-------------|
@@ -100,7 +105,7 @@ ABB REF615
 
 #### Fuse Datasheet Column
 
-**Location:** `E:\Programming\_python_work\protection-device-management\Data sources\Fuse datasheets`
+**Location:** `<project_root>\fuse_datasheets` (project-relative)
 
 | File | Description | Maintenance |
 |------|-------------|-------------|
@@ -137,7 +142,7 @@ All `.csv` files in this directory are treated as mapping files. The filename (w
 
 #### Mapping File Validated Column
 
-**Location:** `E:\Programming\_python_work\protection-device-management\Data sources\IPS to PF mapping validation`
+**Location:** `<project_root>\ips_to_pf_mapping_file_validation` (project-relative)
 
 | File | Description | Maintenance |
 |------|-------------|-------------|
@@ -179,14 +184,50 @@ GE_F60
 |-------------|----------|------------------|
 | IPS Relay Patterns (EE) | `Data sources\Queries\Report-Cache-ProtectionSettingIDs-EE.csv` | Auto-generated |
 | IPS Relay Patterns (EX) | `Data sources\Queries\Report-Cache-ProtectionSettingIDs-EX.csv` | Auto-generated |
-| PowerFactory Relay Models | `Data sources\PowerFactory types\pf_relay_models.csv` | Auto-generated |
-| PowerFactory Fuse Models | `Data sources\PowerFactory types\pf_fuse_models.csv` | Auto-generated |
+| PowerFactory Relay Models | `<project_root>\pf_relay_models\pf_relay_models.csv` | Auto-generated |
+| PowerFactory Fuse Models | `<project_root>\pf_fuse_models\pf_fuse_models.csv` | Auto-generated |
 | Type Mapping | `Data sources\type mapping\type_mapping.csv` | User maintained |
 | Mapping Files | `Data sources\mapping\*.csv` | User maintained |
 | Script Logs | `Data sources\logs\ips_to_pf` | Auto-generated |
-| Device Validation Log | `Data sources\PowerFactory device validation\PowerFactory device validation log.csv` | User maintained |
-| Mapping Validation Log | `Data sources\IPS to PF mapping validation\IPS to PF mapping file validation log.csv` | User maintained |
-| Fuse Datasheet Log | `Data sources\Fuse datasheets\Fuse datasheet log.csv` | User maintained |
+| Device Validation Log | `<project_root>\pf_device_validation\PowerFactory device validation log.csv` | User maintained |
+| Mapping Validation Log | `<project_root>\ips_to_pf_mapping_file_validation\IPS to PF mapping file validation log.csv` | User maintained |
+| Fuse Datasheet Log | `<project_root>\fuse_datasheets\Fuse datasheet log.csv` | User maintained |
+
+---
+
+## Project Directory Structure
+
+The following data source folders should exist in the project root directory:
+
+```
+protection-device-management/
+├── main.py                              # Main application entry point
+├── common.py                            # Shared utilities and styling
+├── data_manager.py                      # Centralized data loading and caching
+├── ips_relay_patterns.py                # IPS Relay Patterns module
+├── relay_models.py                      # PowerFactory Relay Models module
+├── fuse_models.py                       # PowerFactory Fuse Models module
+├── mapping_files.py                     # IPS to PowerFactory Mapping Files module
+├── script_maintenance.py                # Script Maintenance module
+├── validation_suite.py                  # Validation Suite module
+├── data_sources.py                      # Data Source Management module
+├── placeholder.py                       # Placeholder window for features under construction
+├── pf_relay_models/                     # Project-relative data source
+│   └── pf_relay_models.csv
+├── pf_fuse_models/                      # Project-relative data source
+│   └── pf_fuse_models.csv
+├── pf_device_validation/                # Project-relative data source
+│   └── PowerFactory device validation log.csv
+├── ips_to_pf_mapping_file_validation/   # Project-relative data source
+│   └── IPS to PF mapping file validation log.csv
+├── fuse_datasheets/                     # Project-relative data source
+│   └── Fuse datasheet log.csv
+└── Data sources/                        # External data sources (absolute path)
+    ├── Queries/
+    ├── mapping/
+    ├── type mapping/
+    └── logs/
+```
 
 ---
 
@@ -198,7 +239,7 @@ GE_F60
 2. Execute a short circuit command
 3. Check if the relay trips as expected
 4. Provide a trace of all input and output signals for each relay block
-5. Move all documentation to: `Data sources\PowerFactory device validation`
+5. Move all documentation to: `<project_root>\pf_device_validation`
 6. Update the PowerFactory device validation log with the exact name of the PowerFactory Relay Model
 
 ### Mapping File Validation
@@ -207,28 +248,8 @@ GE_F60
 
 1. Using the `ips_to_pf.py` script and the mapping file, apply known relay settings from a test relay setting ID
 2. Verify that all relay attributes match the relay setting ID
-3. Move all documentation to: `Data sources\IPS to PF mapping validation`
+3. Move all documentation to: `<project_root>\ips_to_pf_mapping_file_validation`
 4. Update the IPS to PF mapping file validation log with the exact name of the mapping file
-
----
-
-## Application File Structure
-
-```
-protection-device-management/
-├── main.py                 # Main application entry point and landing page
-├── common.py               # Shared utilities, colors, and styling
-├── data_manager.py         # Centralized data loading and caching
-├── ips_relay_patterns.py   # IPS Relay Patterns module
-├── relay_models.py         # PowerFactory Relay Models module
-├── fuse_models.py          # PowerFactory Fuse Models module
-├── mapping_files.py        # IPS to PowerFactory Mapping Files module
-├── script_maintenance.py   # Script Maintenance module
-├── validation_suite.py     # Validation Suite module
-├── data_sources.py         # Data Source Management module
-├── placeholder.py          # Placeholder window for features under construction
-└── Data sources/           # All data source files (see above)
-```
 
 ---
 
@@ -237,21 +258,30 @@ protection-device-management/
 All data source directory paths are defined as constants in `data_manager.py`:
 
 ```python
+# Project root directory (automatically determined)
+PROJECT_ROOT = Path(__file__).parent
+
+# External data sources (absolute paths - may need updating when moving to new environment)
 SOURCE_DIR = Path(r"E:\...\Data sources\Queries")
 MAPPING_DIR = Path(r"E:\...\Data sources\mapping")
 TYPE_MAPPING_DIR = Path(r"E:\...\Data sources\type mapping")
 LOGS_DIR = Path(r"E:\...\Data sources\logs")
-PF_TYPES_DIR = Path(r"E:\...\Data sources\PowerFactory types")
-PF_DEVICE_VALIDATION_DIR = Path(r"E:\...\Data sources\PowerFactory device validation")
-MAPPING_VALIDATION_DIR = Path(r"E:\...\Data sources\IPS to PF mapping validation")
-FUSE_DATASHEET_DIR = Path(r"E:\...\Data sources\Fuse datasheets")
+
+# Project-relative data sources (stored within the project directory)
+PF_RELAY_MODELS_DIR = PROJECT_ROOT / "pf_relay_models"
+PF_FUSE_MODELS_DIR = PROJECT_ROOT / "pf_fuse_models"
+PF_DEVICE_VALIDATION_DIR = PROJECT_ROOT / "pf_device_validation"
+MAPPING_VALIDATION_DIR = PROJECT_ROOT / "ips_to_pf_mapping_file_validation"
+FUSE_DATASHEET_DIR = PROJECT_ROOT / "fuse_datasheets"
 ```
 
-To change a data source location:
+To change an external data source location:
 1. Open `data_manager.py`
 2. Modify the appropriate `*_DIR` constant
 3. Ensure the new directory exists and contains the required files
 4. Restart the application
+
+Project-relative data sources automatically move with the project when the repository is relocated.
 
 ---
 
@@ -302,6 +332,7 @@ Alternatively, use the `refresh_data()` method on the DataManager instance for p
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0 | Initial | Initial release with all core modules |
+| 1.1 | Current | Updated data source locations to use project-relative paths |
 
 ---
 

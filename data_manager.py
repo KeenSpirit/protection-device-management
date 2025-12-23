@@ -15,15 +15,25 @@ import os
 from datetime import datetime
 
 
+# Configuration - Project root directory (where the application files are located)
+PROJECT_ROOT = Path(__file__).parent
+
 # Configuration - Data source directories
+# External data sources (absolute paths - may need updating when moving to new environment)
 SOURCE_DIR = Path(r"E:\Programming\_python_work\protection-device-management\Data sources\Queries")
 MAPPING_DIR = Path(r"E:\Programming\_python_work\protection-device-management\Data sources\mapping")
 TYPE_MAPPING_DIR = Path(r"E:\Programming\_python_work\protection-device-management\Data sources\type mapping")
 LOGS_DIR = Path(r"E:\Programming\_python_work\protection-device-management\Data sources\logs")
-PF_TYPES_DIR = Path(r"E:\Programming\_python_work\protection-device-management\Data sources\PowerFactory types")
-PF_DEVICE_VALIDATION_DIR = Path(r"E:\Programming\_python_work\protection-device-management\Data sources\PowerFactory device validation")
-MAPPING_VALIDATION_DIR = Path(r"E:\Programming\_python_work\protection-device-management\Data sources\IPS to PF mapping validation")
-FUSE_DATASHEET_DIR = Path(r"E:\Programming\_python_work\protection-device-management\Data sources\Fuse datasheets")
+
+# Project-relative data sources (stored within the project directory)
+PF_RELAY_MODELS_DIR = PROJECT_ROOT / "pf_relay_models"
+PF_FUSE_MODELS_DIR = PROJECT_ROOT / "pf_fuse_models"
+PF_DEVICE_VALIDATION_DIR = PROJECT_ROOT / "pf_device_validation"
+MAPPING_VALIDATION_DIR = PROJECT_ROOT / "ips_to_pf_mapping_file_validation"
+FUSE_DATASHEET_DIR = PROJECT_ROOT / "fuse_datasheets"
+
+# Legacy constant for backwards compatibility (points to relay models dir)
+PF_TYPES_DIR = PF_RELAY_MODELS_DIR
 
 
 @dataclass
@@ -557,7 +567,7 @@ class DataManager:
         self.cache.relay_models = []
         self.cache.relay_models_last_modified = ''
 
-        relay_models_path = PF_TYPES_DIR / "pf_relay_models.csv"
+        relay_models_path = PF_RELAY_MODELS_DIR / "pf_relay_models.csv"
 
         try:
             if not relay_models_path.exists():
@@ -601,7 +611,7 @@ class DataManager:
         self.cache.fuse_models = []
         self.cache.fuse_models_last_modified = ''
 
-        fuse_models_path = PF_TYPES_DIR / "pf_fuse_models.csv"
+        fuse_models_path = PF_FUSE_MODELS_DIR / "pf_fuse_models.csv"
 
         try:
             if not fuse_models_path.exists():

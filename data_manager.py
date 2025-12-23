@@ -20,10 +20,10 @@ PROJECT_ROOT = Path(__file__).parent
 
 # Configuration - Data source directories
 # External data sources (absolute paths - may need updating when moving to new environment)
-SOURCE_DIR = Path(r"E:\Programming\_python_work\protection-device-management\Data sources\Queries")
-MAPPING_DIR = Path(r"E:\Programming\_python_work\protection-device-management\Data sources\mapping")
-TYPE_MAPPING_DIR = Path(r"E:\Programming\_python_work\protection-device-management\Data sources\type mapping")
-LOGS_DIR = Path(r"E:\Programming\_python_work\protection-device-management\Data sources\logs")
+SOURCE_DIR = Path(r"Q:\DATA\QueryCsvCache")
+MAPPING_DIR = Path(r"Y:\PROTECTION\STAFF\Dan Park\PowerFactory\Dan script development\ips_to_pf\mapping_files\relay_maps")
+TYPE_MAPPING_DIR = Path(r"Y:\PROTECTION\STAFF\Dan Park\PowerFactory\Dan script development\ips_to_pf\mapping_files\type_mapping")
+LOGS_DIR = Path(r"Y:\PROTECTION\STAFF\Dan Park\PowerFactory\Dan script development\ips_to_pf\results_log")
 
 # Project-relative data sources (stored within the project directory)
 PF_RELAY_MODELS_DIR = PROJECT_ROOT / "pf_relay_models"

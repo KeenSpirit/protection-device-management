@@ -266,7 +266,7 @@ class IPSRelayPatternsWindow:
         # Exit button
         create_styled_button(
             button_container,
-            "Exit",
+            "Exit Application",
             self._on_exit,
             COLORS['exit_btn'],
             COLORS['exit_btn_hover']

@@ -4,7 +4,7 @@ Displays script run logs and failed transfer details.
 """
 
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox
 import subprocess
 import platform
 
@@ -102,7 +102,11 @@ class ScriptMaintenanceWindow:
         dir_link.bind('<Enter>', lambda e: dir_link.configure(fg=COLORS['return_btn_hover']))
         dir_link.bind('<Leave>', lambda e: dir_link.configure(fg=COLORS['return_btn']))
 
-        # Status message
+        # Status row with message and delete button
+        status_row = tk.Frame(header_frame, bg=COLORS['bg_primary'])
+        status_row.pack(fill=tk.X, pady=(10, 0))
+
+        # Status message (left side)
         total_runs = self.log_stats.get('total_runs', 0)
         total_failures = self.log_stats.get('total_failures', 0)
 
@@ -125,14 +129,119 @@ class ScriptMaintenanceWindow:
                 status_text = f"{total_runs} script run(s) logged | No transfers recorded"
                 status_color = '#f39c12'
 
-        status_label = tk.Label(
-            header_frame,
+        self.status_label = tk.Label(
+            status_row,
             text=status_text,
             font=('Segoe UI', 11),
             fg=status_color,
             bg=COLORS['bg_primary']
         )
-        status_label.pack(anchor='w', pady=(10, 0))
+        self.status_label.pack(side=tk.LEFT)
+
+        # Delete Log File Contents button (right side)
+        delete_btn = tk.Button(
+            status_row,
+            text="Delete Log File Contents",
+            font=('Segoe UI', 10),
+            fg='white',
+            bg=COLORS['exit_btn'],
+            activebackground=COLORS['exit_btn_hover'],
+            activeforeground='white',
+            relief='flat',
+            cursor='hand2',
+            padx=15,
+            pady=4,
+            command=self._on_delete_log_contents
+        )
+        delete_btn.pack(side=tk.RIGHT)
+
+        # Button hover effects
+        delete_btn.bind('<Enter>', lambda e: delete_btn.configure(bg=COLORS['exit_btn_hover']))
+        delete_btn.bind('<Leave>', lambda e: delete_btn.configure(bg=COLORS['exit_btn']))
+
+    def _on_delete_log_contents(self):
+        """Handle delete log file contents button click."""
+        # Show confirmation dialog
+        result = messagebox.askyesno(
+            "Confirm Delete",
+            "Are you sure you want to delete all contents of the log file?\n\n"
+            "This action cannot be undone.",
+            icon='warning',
+            parent=self.window
+        )
+
+        if result:
+            try:
+                # Get the log file path
+                log_file_path = LOGS_DIR / "ips_to_pf"
+
+                # Clear the file contents by opening in write mode
+                with open(log_file_path, 'w', encoding='utf-8') as f:
+                    pass  # Opening in 'w' mode and closing clears the file
+
+                # Refresh the data manager
+                self.data_manager.refresh_data()
+
+                # Update local data references
+                self.script_run_logs = self.data_manager.get_script_run_logs()
+                self.failed_transfers = self.data_manager.get_failed_transfers()
+                self.log_stats = self.data_manager.get_script_log_stats()
+
+                # Refresh the tables
+                self._refresh_tables()
+
+                # Update status message
+                self.status_label.config(
+                    text="No script runs found in log file",
+                    fg=COLORS['exit_btn']
+                )
+
+                # Update footer status
+                self._update_footer_status()
+
+                # Show success message
+                messagebox.showinfo(
+                    "Success",
+                    "Log file contents have been deleted successfully.",
+                    parent=self.window
+                )
+
+            except Exception as e:
+                messagebox.showerror(
+                    "Error",
+                    f"Failed to delete log file contents:\n{str(e)}",
+                    parent=self.window
+                )
+
+    def _refresh_tables(self):
+        """Refresh both tables after data change."""
+        # Clear and repopulate script runs table
+        for item in self.runs_tree.get_children():
+            self.runs_tree.delete(item)
+        self._populate_script_runs_table()
+
+        # Clear and repopulate failed transfers table
+        for item in self.failures_tree.get_children():
+            self.failures_tree.delete(item)
+        self._populate_failed_transfers_table()
+
+        # Update record count labels
+        self.runs_count_label.config(text=f"Showing {len(self.script_run_logs)} script run(s)")
+        self.failures_count_label.config(text=f"Showing {len(self.failed_transfers)} failed transfer(s)")
+
+    def _update_footer_status(self):
+        """Update the footer status label."""
+        total_runs = len(self.script_run_logs)
+        total_failures = len(self.failed_transfers)
+
+        if total_runs > 0:
+            status_text = f"✓ {total_runs} script run(s) | {total_failures} failed transfer(s)"
+            status_color = '#27ae60' if total_failures == 0 else '#f39c12'
+        else:
+            status_text = "⚠ No log data loaded"
+            status_color = COLORS['exit_btn']
+
+        self.footer_status_label.config(text=status_text, fg=status_color)
 
     def _open_directory(self, path):
         """Open the directory in file explorer."""
@@ -147,52 +256,23 @@ class ScriptMaintenanceWindow:
             print(f"Could not open directory: {e}")
 
     def _create_scrollable_content(self, parent):
-        """Create scrollable content area containing both tables."""
-        # Create canvas with scrollbar for the content
-        content_container = tk.Frame(parent, bg=COLORS['bg_primary'])
-        content_container.pack(fill=tk.BOTH, expand=True)
+        """Create content area containing both tables."""
+        # Simple frame container (no outer scrollbar needed - tables have their own)
+        content_frame = tk.Frame(parent, bg=COLORS['bg_primary'])
+        content_frame.pack(fill=tk.BOTH, expand=True)
 
-        canvas = tk.Canvas(content_container, bg=COLORS['bg_primary'], highlightthickness=0)
-        scrollbar = ttk.Scrollbar(content_container, orient=tk.VERTICAL, command=canvas.yview)
-
-        scrollable_frame = tk.Frame(canvas, bg=COLORS['bg_primary'])
-
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
-
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-
-        # Bind mousewheel
-        def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-
-        canvas.bind_all("<MouseWheel>", _on_mousewheel)
-
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-
-        # Store canvas reference for width binding
-        self.content_canvas = canvas
-        self.scrollable_frame = scrollable_frame
-
-        # Bind canvas width to frame width
-        def _configure_frame_width(event):
-            canvas.itemconfig(canvas.find_all()[0], width=event.width)
-
-        canvas.bind('<Configure>', _configure_frame_width)
+        # Store reference for compatibility
+        self.content_canvas = None
 
         # Create Table 1: Log of all Script Runs
-        self._create_script_runs_table(scrollable_frame)
+        self._create_script_runs_table(content_frame)
 
         # Spacer between tables
-        spacer = tk.Frame(scrollable_frame, bg=COLORS['bg_primary'], height=20)
+        spacer = tk.Frame(content_frame, bg=COLORS['bg_primary'], height=20)
         spacer.pack(fill=tk.X)
 
         # Create Table 2: Log of All Failed Device Transfers
-        self._create_failed_transfers_table(scrollable_frame)
+        self._create_failed_transfers_table(content_frame)
 
     def _create_script_runs_table(self, parent):
         """Create the Script Runs table."""
@@ -280,14 +360,14 @@ class ScriptMaintenanceWindow:
         self._populate_script_runs_table()
 
         # Record count label
-        count_label = tk.Label(
+        self.runs_count_label = tk.Label(
             parent,
             text=f"Showing {len(self.script_run_logs)} script run(s)",
             font=('Segoe UI', 9),
             fg=COLORS['text_secondary'],
             bg=COLORS['bg_primary']
         )
-        count_label.pack(anchor='w', pady=(2, 0))
+        self.runs_count_label.pack(anchor='w', pady=(2, 0))
 
     def _populate_script_runs_table(self):
         """Populate the script runs table with data."""
@@ -401,14 +481,14 @@ class ScriptMaintenanceWindow:
         self._populate_failed_transfers_table()
 
         # Record count label
-        count_label = tk.Label(
+        self.failures_count_label = tk.Label(
             parent,
             text=f"Showing {len(self.failed_transfers)} failed transfer(s)",
             font=('Segoe UI', 9),
             fg=COLORS['text_secondary'],
             bg=COLORS['bg_primary']
         )
-        count_label.pack(anchor='w', pady=(2, 0))
+        self.failures_count_label.pack(anchor='w', pady=(2, 0))
 
     def _populate_failed_transfers_table(self):
         """Populate the failed transfers table with data."""
@@ -446,7 +526,7 @@ class ScriptMaintenanceWindow:
         # Exit button
         create_styled_button(
             button_container,
-            "Exit",
+            "Exit Application",
             self._on_exit,
             COLORS['exit_btn'],
             COLORS['exit_btn_hover']
@@ -472,19 +552,17 @@ class ScriptMaintenanceWindow:
             status_text = "⚠ No log data loaded"
             status_color = COLORS['exit_btn']
 
-        status_label = tk.Label(
+        self.footer_status_label = tk.Label(
             footer_frame,
             text=status_text,
             font=('Segoe UI', 10),
             fg=status_color,
             bg=COLORS['bg_primary']
         )
-        status_label.pack(side=tk.LEFT)
+        self.footer_status_label.pack(side=tk.LEFT)
 
     def _on_return(self):
         """Handle return button click."""
-        # Unbind mousewheel to prevent issues with other windows
-        self.content_canvas.unbind_all("<MouseWheel>")
         self.window.grab_release()
         self.window.destroy()
 

@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Set
 import re
 import json
 import ast
+import os
 from datetime import datetime
 
 
@@ -19,6 +20,7 @@ SOURCE_DIR = Path(r"E:\Programming\_python_work\protection-device-management\Dat
 MAPPING_DIR = Path(r"E:\Programming\_python_work\protection-device-management\Data sources\mapping")
 TYPE_MAPPING_DIR = Path(r"E:\Programming\_python_work\protection-device-management\Data sources\type mapping")
 LOGS_DIR = Path(r"E:\Programming\_python_work\protection-device-management\Data sources\logs")
+PF_TYPES_DIR = Path(r"E:\Programming\_python_work\protection-device-management\Data sources\PowerFactory types")
 
 
 @dataclass
@@ -68,6 +70,25 @@ class FailedTransfer:
 
 
 @dataclass
+class RelayModel:
+    """Represents a PowerFactory relay model."""
+    manufacturer: str
+    model: str
+    used_in_eql: str
+    model_validated: str
+    ips_mapping_file_exists: str
+
+
+@dataclass
+class FuseModel:
+    """Represents a PowerFactory fuse model."""
+    fuse: str
+    fuse_type: str
+    eql_standard: str
+    fuse_datasheet: str
+
+
+@dataclass
 class DataCache:
     """Container for all cached application data."""
     relay_patterns_seq: List[RelayPattern] = field(default_factory=list)
@@ -76,15 +97,22 @@ class DataCache:
     type_mapping_entries: List[TypeMappingEntry] = field(default_factory=list)
     script_run_logs: List[ScriptRunLog] = field(default_factory=list)
     failed_transfers: List[FailedTransfer] = field(default_factory=list)
+    relay_models: List[RelayModel] = field(default_factory=list)
+    fuse_models: List[FuseModel] = field(default_factory=list)
 
     # Lookup dictionaries for fast access
     mapping_by_ips_pattern: Dict[str, str] = field(default_factory=dict)  # IPS pattern -> mapping filename
+    mapping_by_pf_model: Dict[str, List[str]] = field(default_factory=dict)  # PF_MODEL -> list of mapping filenames
 
     # Statistics
     ips_total_records_seq: int = 0
     ips_total_records_regional: int = 0
     mapping_parse_stats: Dict[str, int] = field(default_factory=lambda: {'total': 0, 'success': 0})
     script_log_stats: Dict[str, int] = field(default_factory=lambda: {'total_runs': 0, 'total_failures': 0})
+
+    # File modification dates
+    relay_models_last_modified: str = ''
+    fuse_models_last_modified: str = ''
 
 
 class DataManager:
@@ -123,6 +151,12 @@ class DataManager:
 
         # Load script run logs
         self._load_script_logs()
+
+        # Load PowerFactory relay models
+        self._load_relay_models()
+
+        # Load PowerFactory fuse models
+        self._load_fuse_models()
 
     def _load_type_mapping(self):
         """Load the type_mapping.csv file."""
@@ -207,13 +241,23 @@ class DataManager:
         self.cache.mapping_parse_stats = {'total': total_files, 'success': files_with_mappings}
 
     def _build_mapping_lookup(self):
-        """Build lookup dictionary for fast access: IPS pattern -> mapping filename."""
+        """Build lookup dictionaries for fast access."""
         self.cache.mapping_by_ips_pattern = {}
+        self.cache.mapping_by_pf_model = {}
 
         for entry in self.cache.type_mapping_entries:
+            # Map IPS pattern to its mapping file (add .csv extension for display)
             if entry.ips and entry.mapping_file:
-                # Map IPS pattern to its mapping file (add .csv extension for display)
                 self.cache.mapping_by_ips_pattern[entry.ips] = entry.mapping_file + '.csv'
+
+            # Map PF_MODEL to its mapping files (can have multiple)
+            if entry.pf_model and entry.mapping_file:
+                mapping_filename = entry.mapping_file + '.csv'
+                if entry.pf_model not in self.cache.mapping_by_pf_model:
+                    self.cache.mapping_by_pf_model[entry.pf_model] = []
+                # Avoid duplicates
+                if mapping_filename not in self.cache.mapping_by_pf_model[entry.pf_model]:
+                    self.cache.mapping_by_pf_model[entry.pf_model].append(mapping_filename)
 
     def _load_relay_patterns(self):
         """Load relay patterns from both SEQ and Regional CSV files and link to mapping files."""
@@ -404,6 +448,85 @@ class DataManager:
             print(f"Error loading script logs: {e}")
             self.cache.script_log_stats = {'total_runs': 0, 'total_failures': 0}
 
+    def _load_relay_models(self):
+        """Load PowerFactory relay models from CSV file."""
+        self.cache.relay_models = []
+        self.cache.relay_models_last_modified = ''
+
+        relay_models_path = PF_TYPES_DIR / "pf_relay_models.csv"
+
+        try:
+            if not relay_models_path.exists():
+                print(f"Relay models file not found: {relay_models_path}")
+                return
+
+            # Get file modification date
+            mod_timestamp = os.path.getmtime(relay_models_path)
+            mod_date = datetime.fromtimestamp(mod_timestamp)
+            self.cache.relay_models_last_modified = mod_date.strftime('%d/%m/%Y')
+
+            df = pd.read_csv(relay_models_path, encoding='utf-8')
+
+            for _, row in df.iterrows():
+                manufacturer = str(row.get('Manufacturer', '')).strip() if pd.notna(row.get('Manufacturer', '')) else ''
+                model = str(row.get('Model', '')).strip() if pd.notna(row.get('Model', '')) else ''
+                used_in_eql = str(row.get('Used in EQL', '')).strip() if pd.notna(row.get('Used in EQL', '')) else ''
+                model_validated = str(row.get('Model Validated', '')).strip() if pd.notna(row.get('Model Validated', '')) else ''
+
+                # Look up IPS mapping files from type_mapping based on PF_MODEL match
+                mapping_files = self.cache.mapping_by_pf_model.get(model, [])
+                ips_mapping_file_exists = ', '.join(mapping_files) if mapping_files else ''
+
+                self.cache.relay_models.append(RelayModel(
+                    manufacturer=manufacturer,
+                    model=model,
+                    used_in_eql=used_in_eql,
+                    model_validated=model_validated,
+                    ips_mapping_file_exists=ips_mapping_file_exists
+                ))
+
+            print(f"  - Loaded {len(self.cache.relay_models)} relay models")
+
+        except Exception as e:
+            print(f"Error loading relay models: {e}")
+
+    def _load_fuse_models(self):
+        """Load PowerFactory fuse models from CSV file."""
+        self.cache.fuse_models = []
+        self.cache.fuse_models_last_modified = ''
+
+        fuse_models_path = PF_TYPES_DIR / "pf_fuse_models.csv"
+
+        try:
+            if not fuse_models_path.exists():
+                print(f"Fuse models file not found: {fuse_models_path}")
+                return
+
+            # Get file modification date
+            mod_timestamp = os.path.getmtime(fuse_models_path)
+            mod_date = datetime.fromtimestamp(mod_timestamp)
+            self.cache.fuse_models_last_modified = mod_date.strftime('%d/%m/%Y')
+
+            df = pd.read_csv(fuse_models_path, encoding='utf-8')
+
+            for _, row in df.iterrows():
+                fuse = str(row.get('Fuse', '')).strip() if pd.notna(row.get('Fuse', '')) else ''
+                fuse_type = str(row.get('Type', '')).strip() if pd.notna(row.get('Type', '')) else ''
+                eql_standard = str(row.get('EQL Standard', '')).strip() if pd.notna(row.get('EQL Standard', '')) else ''
+                fuse_datasheet = str(row.get('Fuse datasheet', '')).strip() if pd.notna(row.get('Fuse datasheet', '')) else ''
+
+                self.cache.fuse_models.append(FuseModel(
+                    fuse=fuse,
+                    fuse_type=fuse_type,
+                    eql_standard=eql_standard,
+                    fuse_datasheet=fuse_datasheet
+                ))
+
+            print(f"  - Loaded {len(self.cache.fuse_models)} fuse models")
+
+        except Exception as e:
+            print(f"Error loading fuse models: {e}")
+
     def _format_timestamp(self, timestamp_str: str) -> str:
         """Format ISO timestamp for display."""
         try:
@@ -461,6 +584,22 @@ class DataManager:
     def get_script_log_stats(self) -> Dict[str, int]:
         """Get script log statistics."""
         return self.cache.script_log_stats
+
+    def get_relay_models(self) -> List[RelayModel]:
+        """Get all PowerFactory relay models."""
+        return self.cache.relay_models
+
+    def get_fuse_models(self) -> List[FuseModel]:
+        """Get all PowerFactory fuse models."""
+        return self.cache.fuse_models
+
+    def get_relay_models_last_modified(self) -> str:
+        """Get the last modified date of the relay models file."""
+        return self.cache.relay_models_last_modified
+
+    def get_fuse_models_last_modified(self) -> str:
+        """Get the last modified date of the fuse models file."""
+        return self.cache.fuse_models_last_modified
 
     def _calculate_relay_mapping_percentage(self, patterns: List[RelayPattern]) -> float:
         """Calculate percentage of devices (EQL population) that have mapping files."""
@@ -535,6 +674,38 @@ class DataManager:
                 f"{total_runs} script run(s) logged\n"
                 f"{weighted_success:.1f}% Successful Transfers"
             )
+        except Exception:
+            return "Under Construction"
+
+    def get_relay_models_summary_stats(self) -> str:
+        """Get summary statistics string for PowerFactory relay models."""
+        try:
+            if not self.cache.relay_models:
+                return "No relay models loaded"
+
+            # Count models where "Model Validated" is not blank AND "Used in EQL" is not blank
+            validated_eql_count = sum(
+                1 for rm in self.cache.relay_models
+                if rm.model_validated and rm.used_in_eql
+            )
+
+            return f"{validated_eql_count} EQL PowerFactory relay models validated"
+        except Exception:
+            return "Under Construction"
+
+    def get_fuse_models_summary_stats(self) -> str:
+        """Get summary statistics string for PowerFactory fuse models."""
+        try:
+            if not self.cache.fuse_models:
+                return "No fuse models loaded"
+
+            # Count models where "EQL Standard" is not blank
+            eql_standard_count = sum(
+                1 for fm in self.cache.fuse_models
+                if fm.eql_standard
+            )
+
+            return f"{eql_standard_count} EQL Standard PowerFactory fuse models"
         except Exception:
             return "Under Construction"
 

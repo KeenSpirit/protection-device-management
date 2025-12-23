@@ -16,6 +16,7 @@ from fuse_models import FuseModelsWindow, get_summary_stats as get_fuse_stats
 from mapping_files import MappingFilesWindow, get_summary_stats as get_mapping_stats
 from script_maintenance import ScriptMaintenanceWindow, get_summary_stats as get_maintenance_stats
 from validation_suite import ValidationSuiteWindow
+from data_sources import DataSourcesWindow
 
 
 class LandingPage:
@@ -25,12 +26,28 @@ class LandingPage:
         """Initialize the landing page."""
         self.root = root
         self.root.title("PowerFactory Protection Device Management")
-        self.root.geometry("1400x700")
-        self.root.minsize(1200, 600)
+
+        # Desired window dimensions
+        desired_width = 1400
+        desired_height = 850
+        min_width = 1200
+        min_height = 700
+
+        # Get screen dimensions
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+
+        # Adjust window size to fit within screen (with some margin for taskbar)
+        margin = 50
+        actual_width = min(desired_width, screen_width - margin)
+        actual_height = min(desired_height, screen_height - margin)
+
+        self.root.geometry(f"{actual_width}x{actual_height}")
+        self.root.minsize(min(min_width, screen_width - margin), min(min_height, screen_height - margin))
         self.root.configure(bg=COLORS['bg_primary'])
 
         # Center window
-        center_window(self.root, 1400, 700)
+        center_window(self.root, actual_width, actual_height)
 
         # Configure styles
         configure_styles()
@@ -137,6 +154,18 @@ class LandingPage:
             "Guidance on validating relay models and mapping files.",
             "Open Validation Suite",
             self._open_validation_suite
+        )
+
+        # Data Source Management section (centered, below columns)
+        data_sources_frame = tk.Frame(content_frame, bg=COLORS['bg_primary'])
+        data_sources_frame.pack(fill=tk.X, pady=(15, 0))
+
+        self._create_section_centered(
+            data_sources_frame,
+            "Data Source Management",
+            "Documentation of data sources used in each module.",
+            "Open Data Sources",
+            self._open_data_sources
         )
 
     def _create_header(self, parent):
@@ -311,6 +340,69 @@ class LandingPage:
         btn.bind('<Enter>', lambda e: btn.configure(bg=COLORS['accent']))
         btn.bind('<Leave>', lambda e: btn.configure(bg=COLORS['header_bg']))
 
+    def _create_section_centered(self, parent, title, description, button_text, button_command):
+        """Create a centered section card without the Status field."""
+        # Center container
+        center_container = tk.Frame(parent, bg=COLORS['bg_primary'])
+        center_container.pack(expand=True)
+
+        # Section container with border (fixed width for centered appearance)
+        section_outer = tk.Frame(center_container, bg=COLORS['section_border'])
+        section_outer.pack(pady=(0, 15))
+
+        section_frame = tk.Frame(
+            section_outer,
+            bg=COLORS['section_bg'],
+            padx=40,
+            pady=15
+        )
+        section_frame.pack(fill=tk.X, padx=2, pady=2)
+
+        # Content frame (centered)
+        content_frame = tk.Frame(section_frame, bg=COLORS['section_bg'])
+        content_frame.pack()
+
+        # Section title
+        title_label = tk.Label(
+            content_frame,
+            text=title,
+            font=('Segoe UI', 14, 'bold'),
+            fg=COLORS['accent'],
+            bg=COLORS['section_bg']
+        )
+        title_label.pack()
+
+        # Description
+        desc_label = tk.Label(
+            content_frame,
+            text=description,
+            font=('Segoe UI', 10),
+            fg=COLORS['text_secondary'],
+            bg=COLORS['section_bg']
+        )
+        desc_label.pack(pady=(5, 10))
+
+        # Button
+        btn = tk.Button(
+            content_frame,
+            text=button_text,
+            font=('Segoe UI', 10),
+            fg='white',
+            bg=COLORS['header_bg'],
+            activebackground=COLORS['accent'],
+            activeforeground='white',
+            relief='flat',
+            cursor='hand2',
+            padx=20,
+            pady=6,
+            command=button_command
+        )
+        btn.pack()
+
+        # Button hover effects
+        btn.bind('<Enter>', lambda e: btn.configure(bg=COLORS['accent']))
+        btn.bind('<Leave>', lambda e: btn.configure(bg=COLORS['header_bg']))
+
     def _create_footer(self, parent):
         """Create the footer section (fixed at bottom)."""
         # Separator line
@@ -365,6 +457,10 @@ class LandingPage:
         """Open the Validation Suite window."""
         ValidationSuiteWindow(self.root)
 
+    def _open_data_sources(self):
+        """Open the Data Sources window."""
+        DataSourcesWindow(self.root)
+
     def _on_exit(self):
         """Handle exit button click."""
         self.root.quit()
@@ -389,6 +485,8 @@ def main():
     print(f"  - Loaded {len(data_manager.get_mapping_files())} mapping files")
     print(f"  - Loaded {len(data_manager.get_script_run_logs())} script run logs")
     print(f"  - Loaded {len(data_manager.get_failed_transfers())} failed transfers")
+    print(f"  - Loaded {len(data_manager.get_relay_models())} relay models")
+    print(f"  - Loaded {len(data_manager.get_fuse_models())} fuse models")
     print("Data loading complete.")
 
     app = LandingPage(root)

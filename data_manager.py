@@ -456,7 +456,7 @@ class DataManager:
         self.cache.script_run_logs = []
         self.cache.failed_transfers = []
 
-        log_file_path = LOGS_DIR / "ips_to_pf"
+        log_file_path = LOGS_DIR / "ips_to_pf.log"
 
         try:
             if not log_file_path.exists():

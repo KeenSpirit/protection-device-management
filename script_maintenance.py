@@ -173,7 +173,7 @@ class ScriptMaintenanceWindow:
         if result:
             try:
                 # Get the log file path
-                log_file_path = LOGS_DIR / "ips_to_pf"
+                log_file_path = LOGS_DIR / "ips_to_pf.log"
 
                 # Clear the file contents by opening in write mode
                 with open(log_file_path, 'w', encoding='utf-8') as f:

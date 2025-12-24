@@ -228,7 +228,7 @@ class DataSourcesWindow:
             "5. IPS to PowerFactory Script Maintenance",
             [
                 "The IPS to PowerFactory Script Maintenance table is built from the following data source:",
-                "ips_to_pf.json",
+                "ips_to_pf.log",
                 "",
                 "This file is located at the following network location:",
                 str(LOGS_DIR),
